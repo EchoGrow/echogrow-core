@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Prisma
+*.db
+*.db-journal
+
+# Vite
+.vite/
+
+# Prisma 8 artifacts (not needed for Prisma 7)
+.agents/
+.claude/
+.cursor/
+.devin/
