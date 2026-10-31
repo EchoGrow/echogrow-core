@@ -1,16 +1,5 @@
-/**
- * Thin HTTP client for the EchoGrow API.
- *
- * The contract mirrors issue #13: `POST /interviews/upload` takes the raw
- * `transcript` and `cv` text and answers with an `interviewId` immediately,
- * while the analysis runs in the background.
- */
-
 const API_BASE_URL = (import.meta.env.VITE_API_URL ?? '/api').replace(/\/+$/, '')
-
-/** Local fake response, used while the backend endpoint is still being built. */
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true'
-
 const REQUEST_TIMEOUT_MS = 30_000
 
 export interface CreateInterviewRequest {
@@ -25,7 +14,6 @@ export interface CreateInterviewResponse {
 
 export class ApiError extends Error {
   readonly status: number
-
   constructor(message: string, status = 0) {
     super(message)
     this.name = 'ApiError'
@@ -56,19 +44,13 @@ async function readErrorMessage(response: Response): Promise<string> {
     const body: unknown = await response.json()
     if (body && typeof body === 'object') {
       const record = body as { message?: unknown; error?: unknown }
-      if (typeof record.message === 'string' && record.message.trim()) {
-        return record.message
-      }
+      if (typeof record.message === 'string' && record.message.trim()) return record.message
       if (record.error && typeof record.error === 'object') {
         const nested = (record.error as { message?: unknown }).message
-        if (typeof nested === 'string' && nested.trim()) {
-          return nested
-        }
+        if (typeof nested === 'string' && nested.trim()) return nested
       }
     }
-  } catch {
-    // Non-JSON body: fall back to the status-based message.
-  }
+  } catch { /* ignore */ }
   return fallbackMessage(response.status)
 }
 
@@ -77,16 +59,10 @@ async function mockCreateInterview(): Promise<CreateInterviewResponse> {
   return { interviewId: crypto.randomUUID(), status: 'queued' }
 }
 
-export async function createInterview(
-  input: CreateInterviewRequest,
-): Promise<CreateInterviewResponse> {
-  if (USE_MOCK) {
-    return mockCreateInterview()
-  }
-
+export async function createInterview(input: CreateInterviewRequest): Promise<CreateInterviewResponse> {
+  if (USE_MOCK) return mockCreateInterview()
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
-
   try {
     const response = await fetch(`${API_BASE_URL}/interviews/upload`, {
       method: 'POST',
@@ -94,24 +70,13 @@ export async function createInterview(
       body: JSON.stringify(input),
       signal: controller.signal,
     })
-
-    if (!response.ok) {
-      throw new ApiError(await readErrorMessage(response), response.status)
-    }
-
+    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
     const data = (await response.json()) as Partial<CreateInterviewResponse>
-    if (!data.interviewId) {
-      throw new ApiError('The server response did not include an interviewId.', response.status)
-    }
-
+    if (!data.interviewId) throw new ApiError('The server response did not include an interviewId.', response.status)
     return { interviewId: data.interviewId, status: data.status ?? 'queued' }
   } catch (cause) {
-    if (cause instanceof ApiError) {
-      throw cause
-    }
-    if (cause instanceof DOMException && cause.name === 'AbortError') {
-      throw new ApiError('The request timed out. Check your connection and try again.')
-    }
+    if (cause instanceof ApiError) throw cause
+    if (cause instanceof DOMException && cause.name === 'AbortError') throw new ApiError('The request timed out. Check your connection and try again.')
     throw new ApiError('Could not reach the server. Check your connection and try again.')
   } finally {
     window.clearTimeout(timeout)

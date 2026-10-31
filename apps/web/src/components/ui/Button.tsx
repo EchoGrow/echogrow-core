@@ -6,11 +6,10 @@ type ButtonVariant = 'primary' | 'accent' | 'secondary' | 'ghost'
 type ButtonSize = 'sm' | 'md' | 'lg'
 
 const VARIANTS: Record<ButtonVariant, string> = {
-  primary: 'bg-navy-900 text-white shadow-sm hover:bg-navy-800 active:bg-navy-950',
-  accent: 'bg-accent-600 text-white shadow-sm hover:bg-accent-700 active:bg-accent-800',
-  secondary:
-    'border border-line-strong bg-surface text-navy-800 hover:border-navy-300 hover:bg-navy-50',
-  ghost: 'text-ink-muted hover:bg-navy-50 hover:text-navy-900',
+  primary: 'bg-navy-900 text-white shadow-sm hover:bg-navy-800 active:scale-[0.98] dark:bg-accent-500 dark:hover:bg-accent-400 dark:text-navy-950',
+  accent: 'bg-accent-500 text-white shadow-sm hover:bg-accent-600 active:scale-[0.98] dark:bg-accent-400 dark:hover:bg-accent-300 dark:text-navy-950',
+  secondary: 'border border-line-strong bg-surface-card text-fg hover:border-accent-500 hover:bg-chip active:scale-[0.98]',
+  ghost: 'text-fg-muted hover:bg-chip hover:text-fg active:scale-[0.98]',
 }
 
 const SIZES: Record<ButtonSize, string> = {
@@ -22,7 +21,6 @@ const SIZES: Record<ButtonSize, string> = {
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant
   size?: ButtonSize
-  /** Shows a spinner and disables the button while a request is in flight. */
   loading?: boolean
 }
 
@@ -41,7 +39,8 @@ export function Button({
       type={type}
       className={cn(
         'inline-flex select-none items-center justify-center gap-2 rounded-xl font-semibold',
-        'transition-colors disabled:cursor-not-allowed disabled:opacity-60',
+        'transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
         VARIANTS[variant],
         SIZES[size],
         className,

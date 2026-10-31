@@ -1,10 +1,13 @@
-import { useRef, useState } from 'react'
-import type { ChangeEvent, FormEvent, ReactNode } from 'react'
+import { useState } from 'react'
+import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Logo } from '../components/brand/Logo'
-import { Alert, Button, Card, Field, Spinner, Textarea } from '../components/ui'
+import { SEO } from '../components/SEO'
+import { ThemeToggle } from '../components/ThemeToggle'
+import { Button, Card, Dropzone, Field, Spinner, Textarea, toast } from '../components/ui'
 import { ApiError, createInterview } from '../lib/api'
-import { DEMO_CV, DEMO_TRANSCRIPT } from '../lib/demoInterview'
+import { DEMO_SCENARIOS } from '../lib/demoInterview'
+import { extractPdfText } from '../lib/pdf'
 import { cn } from '../lib/cn'
 
 const MIN_TRANSCRIPT = 40
@@ -16,352 +19,313 @@ interface FieldErrors {
   cv?: string
 }
 
-function UploadIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" className={cn('h-4 w-4', className)}>
-      <path
-        d="M10 13V3m0 0L6.5 6.5M10 3l3.5 3.5M4 14v1.5A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5V14"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
-function CheckIcon() {
-  return (
-    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" className="h-4 w-4">
-      <path
-        d="M4 10.5l4 4 8-9"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
 function CharCounter({ value }: { value: number }) {
   const nearLimit = value > MAX_LENGTH * 0.9
   return (
-    <span className={cn(nearLimit && 'font-medium text-amber-600')}>
+    <span className={cn(nearLimit && 'font-medium text-warning-700')}>
       {value.toLocaleString()} / {MAX_LENGTH.toLocaleString()}
     </span>
   )
 }
 
-function ValuePoint({ children }: { children: ReactNode }) {
+function StepBadge({ step }: { step: number }) {
   return (
-    <li className="flex items-start gap-3">
-      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent-500/15 text-accent-300">
-        <CheckIcon />
-      </span>
-      <span className="text-sm leading-relaxed text-navy-100">{children}</span>
-    </li>
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-500/15 font-mono text-xs font-semibold text-accent-700 dark:text-accent-300">
+      {String(step).padStart(2, '0')}
+    </span>
   )
 }
 
-function BrandPanel() {
+function SampleMenu({ disabled, onPick }: { disabled: boolean; onPick: (id: string) => void }) {
+  const [open, setOpen] = useState(false)
   return (
-    <aside className="relative hidden overflow-hidden bg-navy-900 lg:flex lg:flex-col lg:justify-between lg:p-12">
-      {/* ambient glow + texture */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -top-40 -right-24 h-96 w-96 rounded-full bg-accent-500/20 blur-3xl"
-      />
-      <div aria-hidden="true" className="bg-dot-grid pointer-events-none absolute inset-0" />
+    <div className="relative">
+      <Button variant="ghost" size="sm" disabled={disabled} onClick={() => setOpen((v) => !v)}>
+        Load sample
+        <svg viewBox="0 0 20 20" fill="currentColor" className={cn('h-3.5 w-3.5 transition-transform', open && 'rotate-180')}>
+          <path d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.06l3.71-3.83a.75.75 0 1 1 1.08 1.04l-4.25 4.39a.75.75 0 0 1-1.08 0L5.21 8.27a.75.75 0 0 1 .02-1.06Z" />
+        </svg>
+      </Button>
+      {open ? (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} aria-hidden="true" />
+          <div className="absolute right-0 z-40 mt-2 w-72 overflow-hidden rounded-xl border border-line bg-surface-card shadow-lift animate-scale-in">
+            {DEMO_SCENARIOS.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                className="block w-full px-4 py-3 text-left transition-colors hover:bg-chip"
+                onClick={() => {
+                  setOpen(false)
+                  onPick(s.id)
+                }}
+              >
+                <span className="block text-sm font-semibold text-fg-strong">{s.label}</span>
+                <span className="mt-0.5 block text-xs text-fg-muted">{s.hint}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      ) : null}
+    </div>
+  )
+}
 
-      <div className="relative">
-        <Logo variant="light" size="lg" />
+function IconQuote() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6">
+      <path d="M9 7H5a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h2v2a2 2 0 0 1-2 2H4m15-11h-4a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h2v2a2 2 0 0 1-2 2h-1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
 
-        <p className="mt-16 text-xs font-semibold tracking-[0.18em] text-accent-400 uppercase">
-          Interview verification
-        </p>
-        <h2 className="mt-4 max-w-sm text-3xl leading-tight font-semibold tracking-tight text-white text-balance">
-          Hire on evidence, not on memory.
-        </h2>
-        <p className="mt-4 max-w-sm text-sm leading-relaxed text-navy-200">
-          EchoGrow reads the transcript and the resume together — scoring four dimensions with
-          verbatim quotes and flagging every claim that does not line up.
-        </p>
+function IconFlag() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6">
+      <path d="M5 21V4m0 0h9l-1.5 4H5m0 4h11l-1.5 4H5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
 
-        <figure className="mt-8 max-w-sm rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-          <blockquote className="font-mono text-[13px] leading-relaxed text-navy-100">
-            “I led a team of six backend engineers for about two years.”
-          </blockquote>
-          <figcaption className="mt-3 flex items-center gap-2 text-xs text-accent-300">
-            <span className="h-px w-6 bg-accent-400" />
-            Resume: Backend Developer — no leadership role
-          </figcaption>
-        </figure>
-
-        <ul className="mt-8 space-y-3">
-          <ValuePoint>Verbatim evidence behind every score</ValuePoint>
-          <ValuePoint>Contradictions caught against the resume</ValuePoint>
-          <ValuePoint>A three-week plan aimed at the real gap</ValuePoint>
-        </ul>
-      </div>
-
-      <p className="relative mt-10 text-xs text-navy-400">
-        Built for interviewers who have to justify the decision.
-      </p>
-    </aside>
+function IconPath() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6">
+      <path d="M4 19h4v-6H4v6Zm6 0h4V9h-4v10Zm6 0h4V5h-4v14Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   )
 }
 
 export function UploadPage() {
   const navigate = useNavigate()
-  const transcriptInput = useRef<HTMLInputElement>(null)
-  const cvInput = useRef<HTMLInputElement>(null)
-
   const [transcript, setTranscript] = useState('')
   const [cv, setCv] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
 
   function validate(): FieldErrors {
     const errors: FieldErrors = {}
-    if (transcript.trim().length < MIN_TRANSCRIPT) {
-      errors.transcript = `Paste at least ${MIN_TRANSCRIPT} characters of interview transcript.`
-    }
-    if (cv.trim().length < MIN_CV) {
-      errors.cv = `Paste at least ${MIN_CV} characters of resume text.`
-    }
+    if (transcript.trim().length < MIN_TRANSCRIPT) errors.transcript = `Paste at least ${MIN_TRANSCRIPT} characters of interview transcript.`
+    if (cv.trim().length < MIN_CV) errors.cv = `Upload or paste at least ${MIN_CV} characters of resume text.`
     return errors
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (submitting) return
-
     const errors = validate()
     setFieldErrors(errors)
-    if (Object.keys(errors).length > 0) return
-
+    if (Object.keys(errors).length > 0) {
+      toast.error('Missing text', { description: 'Fill in both the transcript and the resume before analyzing.' })
+      return
+    }
     setSubmitting(true)
-    setError(null)
-
     try {
-      const { interviewId } = await createInterview({
-        transcript: transcript.trim(),
-        cv: cv.trim(),
-      })
+      const { interviewId } = await createInterview({ transcript: transcript.trim(), cv: cv.trim() })
+      toast.success('Analysis started', { description: 'Redirecting to the report…' })
       navigate(`/dashboard/${interviewId}/overview`, { replace: true })
     } catch (cause) {
-      setError(
-        cause instanceof ApiError
-          ? cause.message
-          : 'Something went wrong while starting the analysis. Please try again.',
-      )
+      const message = cause instanceof ApiError ? cause.message : 'Something went wrong while starting the analysis. Please try again.'
+      toast.error('Could not start the analysis', { description: message })
       setSubmitting(false)
     }
   }
 
-  async function loadTextFile(
-    event: ChangeEvent<HTMLInputElement>,
-    apply: (text: string) => void,
-  ) {
-    const file = event.target.files?.[0]
-    event.target.value = ''
-    if (!file) return
+  function loadScenario(id: string) {
+    const scenario = DEMO_SCENARIOS.find((s) => s.id === id)
+    if (!scenario) return
+    setTranscript(scenario.transcript)
+    setCv(scenario.cv)
+    setFieldErrors({})
+    toast.success('Sample loaded', { description: scenario.label })
+  }
 
+  // ✅ معالجة ملف الـ Transcript (TXT)
+  async function handleTranscriptFile(file: File) {
     try {
       const text = await file.text()
-      apply(text.slice(0, MAX_LENGTH))
-      setError(null)
+      if (!text.trim()) {
+        toast.error('Empty file', { description: 'The text file is empty. Try another file.' })
+        return
+      }
+      setTranscript(text.slice(0, MAX_LENGTH))
+      toast.success('Transcript loaded', { description: `${file.name} → ${text.length.toLocaleString()} characters` })
     } catch {
-      setError(`Could not read “${file.name}”. Make sure it is a plain text file.`)
+      toast.error('Could not read file', { description: 'Make sure it is a valid text file.' })
     }
   }
 
-  function loadDemo() {
-    setTranscript(DEMO_TRANSCRIPT)
-    setCv(DEMO_CV)
-    setFieldErrors({})
-    setError(null)
+  // ✅ معالجة ملف الـ CV (PDF أو TXT)
+  async function handleCvFile(file: File) {
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+    
+    try {
+      let text = ''
+      
+      if (isPdf) {
+        toast.loading('Extracting PDF text…', { id: 'cv-extract' })
+        text = await extractPdfText(file)
+        toast.dismiss('cv-extract')
+      } else {
+        text = await file.text()
+      }
+
+      if (!text.trim()) {
+        toast.error('Empty file', { description: 'Could not extract any text. Try a different file or paste the text.' })
+        return
+      }
+
+      setCv(text.slice(0, MAX_LENGTH))
+      toast.success('Resume extracted', { description: `${file.name} → ${text.length.toLocaleString()} characters` })
+    } catch (error) {
+      toast.dismiss('cv-extract')
+      toast.error('Could not read file', { description: 'Try a different file or paste the resume text.' })
+    }
   }
 
   return (
-    <div className="min-h-svh bg-canvas lg:grid lg:grid-cols-[minmax(0,46%)_minmax(0,1fr)]">
-      <BrandPanel />
-
-      <div className="flex min-h-svh flex-col">
-        <header className="flex items-center justify-between gap-4 border-b border-line bg-surface px-6 py-4 lg:hidden">
-          <Logo size="sm" />
-          <Button variant="ghost" size="sm" onClick={loadDemo} disabled={submitting}>
-            Load sample
-          </Button>
+    <>
+      <SEO
+        title="Analyze an interview"
+        description="Upload an interview transcript and a resume (PDF or text). EchoGrow scores four dimensions with verbatim evidence, flags contradictions, and drafts a three-week plan."
+        url="https://echogrow.app/upload"
+      />
+      <div className="min-h-svh bg-surface">
+        <header className="sticky top-0 z-20 border-b border-line bg-surface-glass backdrop-blur">
+          <div className="container-custom flex h-16 items-center justify-between gap-4">
+            <Logo size="sm" />
+            <div className="flex items-center gap-2">
+              <SampleMenu disabled={submitting} onPick={loadScenario} />
+              <ThemeToggle />
+            </div>
+          </div>
         </header>
 
-        <main className="mx-auto w-full max-w-xl flex-1 px-6 py-10 lg:px-12 lg:py-14">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold tracking-[0.18em] text-accent-600 uppercase">
-                New analysis
-              </p>
-              <h1 className="mt-2 text-2xl font-semibold tracking-tight text-navy-900 sm:text-3xl">
-                Analyze an interview
-              </h1>
-              <p className="mt-2 max-w-md text-sm leading-relaxed text-ink-muted">
-                Paste both texts below. The report is usually ready within a few seconds.
-              </p>
-            </div>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={loadDemo}
-              disabled={submitting}
-              className="hidden lg:inline-flex"
-            >
-              Load sample data
-            </Button>
+        <main className="container-custom max-w-4xl py-10 lg:py-16 animate-fade-up">
+          <div className="text-center">
+            <span className="inline-flex items-center gap-2 rounded-full border border-line bg-chip px-3 py-1 text-xs font-medium text-fg-muted">
+              <span className="h-1.5 w-1.5 rounded-full bg-accent-500 animate-pulse-glow" />
+              Evidence-based candidate vetting
+            </span>
+            <h1 className="mt-5 text-3xl font-semibold tracking-tight text-fg-strong sm:text-4xl">
+              Turn an interview into <span className="text-accent-600 dark:text-accent-400">evidence</span>.
+            </h1>
+            <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-fg-muted">
+              Upload the transcript and the resume. EchoGrow scores four dimensions with verbatim quotes, flags every contradiction, and drafts a three-week plan aimed at the real gap.
+            </p>
           </div>
 
-          <form className="mt-8 space-y-5" onSubmit={handleSubmit} noValidate>
-            {error ? (
-              <Alert
-                variant="error"
-                title="Could not start the analysis"
-                action={
-                  <Button size="sm" variant="secondary" onClick={() => setError(null)}>
-                    Dismiss
-                  </Button>
-                }
-              >
-                {error}
-              </Alert>
-            ) : null}
-
-            <Card className="p-5 sm:p-6">
-              <div className="mb-4 flex items-center gap-2">
-                <span className="font-mono text-xs font-semibold text-accent-600">01</span>
-                <span className="h-px flex-1 bg-line" />
+          <form className="mt-10 space-y-6" onSubmit={handleSubmit} noValidate>
+            <Card className="p-6 sm:p-8">
+              <div className="flex items-start gap-4">
+                <StepBadge step={1} />
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-base font-semibold text-fg-strong">Interview transcript</h2>
+                  <p className="mt-1 text-sm text-fg-muted">
+                    Keep the <code className="rounded bg-chip px-1.5 py-0.5 font-mono text-[12px]">Interviewer:</code> and{' '}
+                    <code className="rounded bg-chip px-1.5 py-0.5 font-mono text-[12px]">Candidate:</code> labels so each answer can be traced.
+                  </p>
+                </div>
               </div>
 
-              <Field
-                id="transcript"
-                label="Interview transcript"
-                hint={
-                  <>
-                    Keep the <code className="rounded bg-navy-50 px-1 py-0.5 font-mono text-[11px]">Interviewer:</code>{' '}
-                    and <code className="rounded bg-navy-50 px-1 py-0.5 font-mono text-[11px]">Candidate:</code>{' '}
-                    labels so each answer can be traced to its question.
-                  </>
-                }
-                error={fieldErrors.transcript}
-                counter={<CharCounter value={transcript.trim().length} />}
-                action={
-                  <>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      disabled={submitting}
-                      onClick={() => transcriptInput.current?.click()}
-                    >
-                      <UploadIcon />
-                      Upload .txt
-                    </Button>
-                    <input
-                      ref={transcriptInput}
-                      type="file"
-                      accept=".txt,text/plain"
-                      className="sr-only"
-                      tabIndex={-1}
-                      disabled={submitting}
-                      onChange={(event) => void loadTextFile(event, setTranscript)}
-                    />
-                  </>
-                }
-              >
+              <Field id="transcript" label="" error={fieldErrors.transcript} counter={<CharCounter value={transcript.trim().length} />} className="mt-5">
+                <Dropzone
+                  id="transcript-file"
+                  accept=".txt,text/plain"
+                  hint="Drop a .txt file, or paste below"
+                  disabled={submitting}
+                  onFile={handleTranscriptFile}
+                  onError={(msg) => toast.error('Could not read file', { description: msg })}
+                  className="mb-4"
+                />
                 <Textarea
                   id="transcript"
                   className="min-h-56 font-mono text-[13px]"
-                  placeholder={
-                    'Interviewer: Tell me about a time you improved performance…\nCandidate: At my previous company…'
-                  }
+                  placeholder={'Interviewer: Tell me about a time you improved performance…\nCandidate: At my previous company…'}
                   value={transcript}
                   maxLength={MAX_LENGTH}
                   disabled={submitting}
                   invalid={Boolean(fieldErrors.transcript)}
-                  onChange={(event) => setTranscript(event.target.value)}
+                  onChange={(e) => setTranscript(e.target.value)}
                 />
               </Field>
             </Card>
 
-            <Card className="p-5 sm:p-6">
-              <div className="mb-4 flex items-center gap-2">
-                <span className="font-mono text-xs font-semibold text-accent-600">02</span>
-                <span className="h-px flex-1 bg-line" />
+            <Card className="p-6 sm:p-8">
+              <div className="flex items-start gap-4">
+                <StepBadge step={2} />
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-base font-semibold text-fg-strong">Resume (PDF or text)</h2>
+                  <p className="mt-1 text-sm text-fg-muted">Upload the candidate's resume. We extract the text so every claim can be checked.</p>
+                </div>
               </div>
 
-              <Field
-                id="cv"
-                label="Resume"
-                hint="Plain text. It is stored unchanged so every claim can be checked against it."
-                error={fieldErrors.cv}
-                counter={<CharCounter value={cv.trim().length} />}
-                action={
-                  <>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      disabled={submitting}
-                      onClick={() => cvInput.current?.click()}
-                    >
-                      <UploadIcon />
-                      Upload .txt
-                    </Button>
-                    <input
-                      ref={cvInput}
-                      type="file"
-                      accept=".txt,text/plain"
-                      className="sr-only"
-                      tabIndex={-1}
-                      disabled={submitting}
-                      onChange={(event) => void loadTextFile(event, setCv)}
-                    />
-                  </>
-                }
-              >
+              <Field id="cv" label="" error={fieldErrors.cv} counter={<CharCounter value={cv.trim().length} />} className="mt-5">
+                <Dropzone
+                  id="cv-file"
+                  accept=".pdf,.txt,application/pdf,text/plain"
+                  hint="Drop a PDF or .txt file"
+                  disabled={submitting}
+                  onFile={handleCvFile}
+                  onError={(msg) => toast.error('Could not read file', { description: msg })}
+                  className="mb-4"
+                />
                 <Textarea
                   id="cv"
                   className="min-h-40 font-mono text-[13px]"
-                  placeholder={'Name: …\nExperience:\n- Backend Developer, Company (2022 – 2024)'}
+                  placeholder="The extracted resume text will appear here. You can also paste it manually."
                   value={cv}
                   maxLength={MAX_LENGTH}
                   disabled={submitting}
                   invalid={Boolean(fieldErrors.cv)}
-                  onChange={(event) => setCv(event.target.value)}
+                  onChange={(e) => setCv(e.target.value)}
                 />
               </Field>
             </Card>
 
-            <div className="flex flex-wrap items-center justify-between gap-4 border-t border-line pt-5">
-              <p className="text-xs leading-relaxed text-ink-muted" aria-live="polite">
+            <div className="flex flex-wrap items-center justify-between gap-4 rounded-card border border-line bg-surface-card p-4 sm:p-5">
+              <p className="text-xs leading-relaxed text-fg-muted" aria-live="polite">
                 {submitting ? (
-                  <span className="inline-flex items-center gap-2 text-accent-700">
+                  <span className="inline-flex items-center gap-2 text-accent-700 dark:text-accent-300">
                     <Spinner className="h-3.5 w-3.5" label="Analyzing" />
                     Analyzing transcript &amp; generating the evidence-based report…
                   </span>
-                ) : (
-                  'Text only — no audio upload.'
-                )}
+                ) : null}
               </p>
               <Button type="submit" size="lg" loading={submitting} disabled={submitting}>
-                Analyze Interview
+                Analyze interview
               </Button>
             </div>
           </form>
+
+          <div className="mt-16 grid gap-6 sm:grid-cols-3 stagger">
+            <div className="flex flex-col items-center text-center rounded-card border border-line bg-surface-card p-6 transition-all hover:shadow-lift hover:border-line-strong">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent-500/15 text-accent-600 dark:text-accent-400 mb-4">
+                <IconQuote />
+              </div>
+              <h3 className="text-base font-semibold text-fg-strong">Evidence, not opinion</h3>
+              <p className="mt-2 text-sm leading-relaxed text-fg-muted">Every score carries a verbatim quote from the transcript, so decisions are defensible.</p>
+            </div>
+            <div className="flex flex-col items-center text-center rounded-card border border-line bg-surface-card p-6 transition-all hover:shadow-lift hover:border-line-strong">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent-500/15 text-accent-600 dark:text-accent-400 mb-4">
+                <IconFlag />
+              </div>
+              <h3 className="text-base font-semibold text-fg-strong">Contradictions surfaced</h3>
+              <p className="mt-2 text-sm leading-relaxed text-fg-muted">Claims that clash with the resume are flagged for human review, not auto-rejected.</p>
+            </div>
+            <div className="flex flex-col items-center text-center rounded-card border border-line bg-surface-card p-6 transition-all hover:shadow-lift hover:border-line-strong">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent-500/15 text-accent-600 dark:text-accent-400 mb-4">
+                <IconPath />
+              </div>
+              <h3 className="text-base font-semibold text-fg-strong">A plan, not a verdict</h3>
+              <p className="mt-2 text-sm leading-relaxed text-fg-muted">Weak dimensions become a three-week plan built from the interview itself.</p>
+            </div>
+          </div>
         </main>
 
-        <footer className="mx-auto w-full max-w-xl px-6 pb-8 text-xs text-ink-subtle lg:px-12">
-          EchoGrow scores Technical Depth, Communication, Domain Experience and Problem Solving.
+        <footer className="container-custom max-w-4xl pb-10 text-center text-xs text-fg-subtle">
+          <p>EchoGrow turns an interview into structured evidence, verifies claims against the resume, and guides the candidate's next step.</p>
         </footer>
       </div>
-    </div>
+    </>
   )
 }

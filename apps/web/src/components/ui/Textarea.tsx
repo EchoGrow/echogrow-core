@@ -2,7 +2,6 @@ import type { TextareaHTMLAttributes } from 'react'
 import { cn } from '../../lib/cn'
 
 export interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
-  /** Renders the field in the error style and links it to the message. */
   invalid?: boolean
 }
 
@@ -13,12 +12,13 @@ export function Textarea({ className, invalid = false, id, ...rest }: TextareaPr
       aria-invalid={invalid || undefined}
       aria-describedby={invalid && id ? `${id}-error` : undefined}
       className={cn(
-        'w-full resize-y rounded-xl border bg-surface px-4 py-3.5 text-sm leading-relaxed text-ink',
-        'transition-colors placeholder:text-ink-subtle',
-        'disabled:cursor-not-allowed disabled:bg-navy-50 disabled:text-ink-muted',
+        'w-full resize-y rounded-xl border bg-surface-card px-4 py-3.5 text-sm leading-relaxed text-fg',
+        'transition-all duration-200 placeholder:text-fg-subtle',
+        'focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-offset-2 focus:ring-offset-surface',
+        'disabled:cursor-not-allowed disabled:bg-chip disabled:text-fg-muted',
         invalid
-          ? 'border-red-400 bg-red-50/40'
-          : 'border-line-strong hover:border-navy-300',
+          ? 'border-danger-500 bg-danger-50/40 dark:bg-danger-500/10'
+          : 'border-line-strong hover:border-accent-500',
         className,
       )}
       {...rest}
