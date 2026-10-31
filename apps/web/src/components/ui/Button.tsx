@@ -2,20 +2,21 @@ import type { ButtonHTMLAttributes } from 'react'
 import { cn } from '../../lib/cn'
 import { Spinner } from './Spinner'
 
-type ButtonVariant = 'primary' | 'secondary' | 'ghost'
-type ButtonSize = 'sm' | 'md'
+type ButtonVariant = 'primary' | 'accent' | 'secondary' | 'ghost'
+type ButtonSize = 'sm' | 'md' | 'lg'
 
 const VARIANTS: Record<ButtonVariant, string> = {
-  primary:
-    'bg-brand-600 text-white shadow-sm hover:bg-brand-700 focus-visible:outline-brand-600 disabled:bg-brand-300',
+  primary: 'bg-navy-900 text-white shadow-sm hover:bg-navy-800 active:bg-navy-950',
+  accent: 'bg-accent-600 text-white shadow-sm hover:bg-accent-700 active:bg-accent-800',
   secondary:
-    'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 focus-visible:outline-slate-400',
-  ghost: 'text-slate-600 hover:bg-slate-100 focus-visible:outline-slate-400',
+    'border border-line-strong bg-surface text-navy-800 hover:border-navy-300 hover:bg-navy-50',
+  ghost: 'text-ink-muted hover:bg-navy-50 hover:text-navy-900',
 }
 
 const SIZES: Record<ButtonSize, string> = {
-  sm: 'h-9 px-3 text-sm',
+  sm: 'h-9 px-3.5 text-[13px]',
   md: 'h-11 px-5 text-sm',
+  lg: 'h-12 px-6 text-[15px]',
 }
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -39,9 +40,8 @@ export function Button({
     <button
       type={type}
       className={cn(
-        'inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors',
-        'focus-visible:outline-2 focus-visible:outline-offset-2',
-        'disabled:cursor-not-allowed disabled:opacity-80',
+        'inline-flex select-none items-center justify-center gap-2 rounded-xl font-semibold',
+        'transition-colors disabled:cursor-not-allowed disabled:opacity-60',
         VARIANTS[variant],
         SIZES[size],
         className,
