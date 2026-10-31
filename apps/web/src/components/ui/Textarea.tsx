@@ -13,12 +13,12 @@ export function Textarea({ className, invalid = false, id, ...rest }: TextareaPr
       aria-invalid={invalid || undefined}
       aria-describedby={invalid && id ? `${id}-error` : undefined}
       className={cn(
-        'w-full resize-y rounded-lg border bg-white px-3.5 py-3 text-sm text-slate-900 shadow-sm',
-        'placeholder:text-slate-400 focus:outline-2 focus:outline-offset-0',
-        'disabled:cursor-not-allowed disabled:bg-slate-50',
+        'w-full resize-y rounded-xl border bg-surface px-4 py-3.5 text-sm leading-relaxed text-ink',
+        'transition-colors placeholder:text-ink-subtle',
+        'disabled:cursor-not-allowed disabled:bg-navy-50 disabled:text-ink-muted',
         invalid
-          ? 'border-red-400 focus:outline-red-500'
-          : 'border-slate-300 focus:outline-brand-500',
+          ? 'border-red-400 bg-red-50/40'
+          : 'border-line-strong hover:border-navy-300',
         className,
       )}
       {...rest}
