@@ -4,6 +4,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { TestModule } from './queues/test/test.module';
+import { LlmModule } from './llm/llm.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { TestModule } from './queues/test/test.module';
       }),
     }),
     TestModule,
+    LlmModule,
   ],
   controllers: [AppController],
   providers: [AppService],
