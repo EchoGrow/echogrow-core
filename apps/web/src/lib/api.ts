@@ -1,3 +1,6 @@
+
+import { EvaluationSchema, type Evaluation } from '@echogrow/shared'
+
 const API_BASE_URL = (import.meta.env.VITE_API_URL ?? '/api').replace(/\/+$/, '')
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true'
 const REQUEST_TIMEOUT_MS = 30_000
@@ -14,6 +17,7 @@ export interface CreateInterviewResponse {
 
 export class ApiError extends Error {
   readonly status: number
+
   constructor(message: string, status = 0) {
     super(message)
     this.name = 'ApiError'
@@ -25,7 +29,7 @@ const MESSAGE_BY_STATUS: Record<number, string> = {
   400: 'The server rejected the request. Check that the transcript and resume were pasted correctly.',
   401: 'You are not authorised to upload interviews.',
   403: 'You do not have permission to upload interviews.',
-  404: 'The upload endpoint was not found. Check VITE_API_URL.',
+  404: 'The requested endpoint was not found. Check VITE_API_URL.',
   409: 'This interview is already being processed.',
   413: 'The text is too long. Please shorten it and try again.',
   422: 'Some fields are invalid. Please review the transcript and resume.',
@@ -42,27 +46,50 @@ function fallbackMessage(status: number): string {
 async function readErrorMessage(response: Response): Promise<string> {
   try {
     const body: unknown = await response.json()
+
     if (body && typeof body === 'object') {
       const record = body as { message?: unknown; error?: unknown }
-      if (typeof record.message === 'string' && record.message.trim()) return record.message
+
+      if (typeof record.message === 'string' && record.message.trim()) {
+        return record.message
+      }
+
       if (record.error && typeof record.error === 'object') {
         const nested = (record.error as { message?: unknown }).message
-        if (typeof nested === 'string' && nested.trim()) return nested
+
+        if (typeof nested === 'string' && nested.trim()) {
+          return nested
+        }
       }
     }
-  } catch { /* ignore */ }
+  } catch {
+    // Ignore invalid error response bodies.
+  }
+
   return fallbackMessage(response.status)
 }
 
 async function mockCreateInterview(): Promise<CreateInterviewResponse> {
   await new Promise((resolve) => setTimeout(resolve, 900))
-  return { interviewId: crypto.randomUUID(), status: 'queued' }
+
+  return {
+    interviewId: crypto.randomUUID(),
+    status: 'queued',
+  }
 }
 
-export async function createInterview(input: CreateInterviewRequest): Promise<CreateInterviewResponse> {
+export async function createInterview(
+  input: CreateInterviewRequest,
+): Promise<CreateInterviewResponse> {
   if (USE_MOCK) return mockCreateInterview()
+
   const controller = new AbortController()
-  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+
+  const timeout = window.setTimeout(
+    () => controller.abort(),
+    REQUEST_TIMEOUT_MS,
+  )
+
   try {
     const response = await fetch(`${API_BASE_URL}/interviews/upload`, {
       method: 'POST',
@@ -70,14 +97,93 @@ export async function createInterview(input: CreateInterviewRequest): Promise<Cr
       body: JSON.stringify(input),
       signal: controller.signal,
     })
-    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+
+    if (!response.ok) {
+      throw new ApiError(
+        await readErrorMessage(response),
+        response.status,
+      )
+    }
+
     const data = (await response.json()) as Partial<CreateInterviewResponse>
-    if (!data.interviewId) throw new ApiError('The server response did not include an interviewId.', response.status)
-    return { interviewId: data.interviewId, status: data.status ?? 'queued' }
+
+    if (!data.interviewId) {
+      throw new ApiError(
+        'The server response did not include an interviewId.',
+        response.status,
+      )
+    }
+
+    return {
+      interviewId: data.interviewId,
+      status: data.status ?? 'queued',
+    }
   } catch (cause) {
     if (cause instanceof ApiError) throw cause
-    if (cause instanceof DOMException && cause.name === 'AbortError') throw new ApiError('The request timed out. Check your connection and try again.')
-    throw new ApiError('Could not reach the server. Check your connection and try again.')
+
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw new ApiError(
+        'The request timed out. Check your connection and try again.',
+      )
+    }
+
+    throw new ApiError(
+      'Could not reach the server. Check your connection and try again.',
+    )
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
+export async function getInterviewScorecard(
+  interviewId: string,
+): Promise<Evaluation> {
+  const controller = new AbortController()
+
+  const timeout = window.setTimeout(
+    () => controller.abort(),
+    REQUEST_TIMEOUT_MS,
+  )
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/interviews/${encodeURIComponent(interviewId)}/scorecard`,
+      {
+        method: 'GET',
+        signal: controller.signal,
+      },
+    )
+
+    if (!response.ok) {
+      throw new ApiError(
+        await readErrorMessage(response),
+        response.status,
+      )
+    }
+
+    const data: unknown = await response.json()
+    const result = EvaluationSchema.safeParse(data)
+
+    if (!result.success) {
+      throw new ApiError(
+        'The scorecard response has an invalid format.',
+        response.status,
+      )
+    }
+
+    return result.data
+  } catch (cause) {
+    if (cause instanceof ApiError) throw cause
+
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw new ApiError(
+        'The request timed out. Please try again.',
+      )
+    }
+
+    throw new ApiError(
+      'Could not load the interview scorecard.',
+    )
   } finally {
     window.clearTimeout(timeout)
   }
