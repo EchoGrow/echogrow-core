@@ -3,8 +3,10 @@ const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true'
 const REQUEST_TIMEOUT_MS = 30_000
 
 export interface CreateInterviewRequest {
-  transcript: string
-  cv: string
+  candidateName: string;
+  candidateEmail: string;
+  transcript: string;
+  cv: string;
 }
 
 export interface CreateInterviewResponse {

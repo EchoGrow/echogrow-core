@@ -19,7 +19,7 @@
     "test:cov": "vitest run --coverage"
   },
   "dependencies": {
-    "@echogrow/shared": "file:../../packages/shared",
+    "@echogrow/shared": "*",
     "@google/genai": "^2.32.0",
     "@nestjs/bullmq": "^12.0.0",
     "@nestjs/common": "^12.0.1",
