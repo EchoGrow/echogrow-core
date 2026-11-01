@@ -15,6 +15,8 @@ const MIN_CV = 20
 const MAX_LENGTH = 100_000
 
 interface FieldErrors {
+  candidateName?: string
+  candidateEmail?: string
   transcript?: string
   cv?: string
 }
@@ -97,6 +99,8 @@ function IconPath() {
 
 export function UploadPage() {
   const navigate = useNavigate()
+  const [candidateName, setCandidateName] = useState('')
+  const [candidateEmail, setCandidateEmail] = useState('')
   const [transcript, setTranscript] = useState('')
   const [cv, setCv] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -104,6 +108,8 @@ export function UploadPage() {
 
   function validate(): FieldErrors {
     const errors: FieldErrors = {}
+    if (candidateName.trim().length < 2) errors.candidateName = 'Name is required.'
+    if (!/^\S+@\S+\.\S+$/.test(candidateEmail)) errors.candidateEmail = 'Valid email is required.'
     if (transcript.trim().length < MIN_TRANSCRIPT) errors.transcript = `Paste at least ${MIN_TRANSCRIPT} characters of interview transcript.`
     if (cv.trim().length < MIN_CV) errors.cv = `Upload or paste at least ${MIN_CV} characters of resume text.`
     return errors
@@ -115,16 +121,21 @@ export function UploadPage() {
     const errors = validate()
     setFieldErrors(errors)
     if (Object.keys(errors).length > 0) {
-      toast.error('Missing text', { description: 'Fill in both the transcript and the resume before analyzing.' })
+      toast.error('Missing information', { description: 'Please fill in all required fields.' })
       return
     }
     setSubmitting(true)
     try {
-      const { interviewId } = await createInterview({ transcript: transcript.trim(), cv: cv.trim() })
+      const { interviewId } = await createInterview({ 
+        candidateName: candidateName.trim(),
+        candidateEmail: candidateEmail.trim(),
+        transcript: transcript.trim(), 
+        cv: cv.trim() 
+      })
       toast.success('Analysis started', { description: 'Redirecting to the report…' })
       navigate(`/dashboard/${interviewId}/overview`, { replace: true })
     } catch (cause) {
-      const message = cause instanceof ApiError ? cause.message : 'Something went wrong while starting the analysis. Please try again.'
+      const message = cause instanceof ApiError ? cause.message : 'Something went wrong while starting the analysis.'
       toast.error('Could not start the analysis', { description: message })
       setSubmitting(false)
     }
@@ -135,11 +146,13 @@ export function UploadPage() {
     if (!scenario) return
     setTranscript(scenario.transcript)
     setCv(scenario.cv)
+    // تعبئة بيانات وهمية للمرشح عند تحميل العينة
+    setCandidateName('Ahmed Al-Mansour')
+    setCandidateEmail('ahmed@example.com')
     setFieldErrors({})
     toast.success('Sample loaded', { description: scenario.label })
   }
 
-  // ✅ معالجة ملف الـ Transcript (TXT)
   async function handleTranscriptFile(file: File) {
     try {
       const text = await file.text()
@@ -154,7 +167,6 @@ export function UploadPage() {
     }
   }
 
-  // ✅ معالجة ملف الـ CV (PDF أو TXT)
   async function handleCvFile(file: File) {
     const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
     
@@ -186,7 +198,7 @@ export function UploadPage() {
     <>
       <SEO
         title="Analyze an interview"
-        description="Upload an interview transcript and a resume (PDF or text). EchoGrow scores four dimensions with verbatim evidence, flags contradictions, and drafts a three-week plan."
+        description="Upload an interview transcript and a resume (PDF or text). EchoGrow scores four dimensions with verbatim evidence, flags contradictions, and drafts a personalized plan."
         url="https://echogrow.app/upload"
       />
       <div className="min-h-svh bg-surface">
@@ -210,11 +222,53 @@ export function UploadPage() {
               Turn an interview into <span className="text-accent-600 dark:text-accent-400">evidence</span>.
             </h1>
             <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-fg-muted">
-              Upload the transcript and the resume. EchoGrow scores four dimensions with verbatim quotes, flags every contradiction, and drafts a three-week plan aimed at the real gap.
+              Upload the transcript and the resume. EchoGrow scores four dimensions with verbatim quotes, flags every contradiction, and drafts a personalized growth plan.
             </p>
           </div>
 
           <form className="mt-10 space-y-6" onSubmit={handleSubmit} noValidate>
+            {/* Step 0: Candidate Info */}
+            <Card className="p-6 sm:p-8">
+              <div className="flex items-start gap-4">
+                <StepBadge step={0} />
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-base font-semibold text-fg-strong">Candidate Information</h2>
+                  <p className="mt-1 text-sm text-fg-muted">We use this to link the interview to the right person.</p>
+                </div>
+              </div>
+              <div className="mt-5 grid gap-5 sm:grid-cols-2">
+                <Field id="candidateName" label="Full Name" error={fieldErrors.candidateName}>
+                  <input
+                    id="candidateName"
+                    type="text"
+                    className={cn(
+                      "w-full rounded-xl border bg-surface-card px-4 py-3 text-sm text-fg transition-all focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-offset-2 focus:ring-offset-surface",
+                      fieldErrors.candidateName ? "border-danger-500" : "border-line-strong hover:border-accent-500"
+                    )}
+                    placeholder="e.g. Ahmed Al-Mansour"
+                    value={candidateName}
+                    onChange={(e) => setCandidateName(e.target.value)}
+                    disabled={submitting}
+                  />
+                </Field>
+                <Field id="candidateEmail" label="Email Address" error={fieldErrors.candidateEmail}>
+                  <input
+                    id="candidateEmail"
+                    type="email"
+                    className={cn(
+                      "w-full rounded-xl border bg-surface-card px-4 py-3 text-sm text-fg transition-all focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-offset-2 focus:ring-offset-surface",
+                      fieldErrors.candidateEmail ? "border-danger-500" : "border-line-strong hover:border-accent-500"
+                    )}
+                    placeholder="e.g. ahmed@example.com"
+                    value={candidateEmail}
+                    onChange={(e) => setCandidateEmail(e.target.value)}
+                    disabled={submitting}
+                  />
+                </Field>
+              </div>
+            </Card>
+
+            {/* Step 1: Transcript */}
             <Card className="p-6 sm:p-8">
               <div className="flex items-start gap-4">
                 <StepBadge step={1} />
@@ -250,6 +304,7 @@ export function UploadPage() {
               </Field>
             </Card>
 
+            {/* Step 2: Resume */}
             <Card className="p-6 sm:p-8">
               <div className="flex items-start gap-4">
                 <StepBadge step={2} />
@@ -282,6 +337,7 @@ export function UploadPage() {
               </Field>
             </Card>
 
+            {/* Action Bar */}
             <div className="flex flex-wrap items-center justify-between gap-4 rounded-card border border-line bg-surface-card p-4 sm:p-5">
               <p className="text-xs leading-relaxed text-fg-muted" aria-live="polite">
                 {submitting ? (
@@ -297,6 +353,7 @@ export function UploadPage() {
             </div>
           </form>
 
+          {/* Value Strip */}
           <div className="mt-16 grid gap-6 sm:grid-cols-3 stagger">
             <div className="flex flex-col items-center text-center rounded-card border border-line bg-surface-card p-6 transition-all hover:shadow-lift hover:border-line-strong">
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent-500/15 text-accent-600 dark:text-accent-400 mb-4">
@@ -316,8 +373,8 @@ export function UploadPage() {
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent-500/15 text-accent-600 dark:text-accent-400 mb-4">
                 <IconPath />
               </div>
-              <h3 className="text-base font-semibold text-fg-strong">A plan, not a verdict</h3>
-              <p className="mt-2 text-sm leading-relaxed text-fg-muted">Weak dimensions become a three-week plan built from the interview itself.</p>
+              <h3 className="text-base font-semibold text-fg-strong">A personalized plan</h3>
+              <p className="mt-2 text-sm leading-relaxed text-fg-muted">Skill gaps become a learning plan tailored to the candidate's actual needs, not a fixed schedule.</p>
             </div>
           </div>
         </main>
