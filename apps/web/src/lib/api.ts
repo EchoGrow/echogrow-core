@@ -12,6 +12,40 @@ export interface CreateInterviewResponse {
   status: string
 }
 
+/** The four dimensions defined in `packages/shared` (evaluation.schema.ts). */
+export type DimensionName =
+  | 'Technical Depth'
+  | 'Communication Clarity'
+  | 'Domain Experience'
+  | 'Problem Solving'
+
+export interface ScorecardDimension {
+  name: DimensionName
+  /** Integer 1–5. */
+  score: number
+  reason: string
+  evidenceQuote: string
+  timestamp?: string
+}
+
+/**
+ * Shape returned by `GET /interviews/:id/scorecard` (issue #18).
+ *
+ * `interviewDate`, `pendingDiscrepancies` and `skillGaps` are optional because
+ * #18 does not return them yet, while #20 needs the two counts and the date.
+ * Until the endpoint (or the AC) is updated, the UI derives what it can and
+ * renders “—” for the rest. See the comment on issue #20.
+ */
+export interface ScorecardResponse {
+  interviewId: string
+  candidateName: string
+  dimensions: ScorecardDimension[]
+  overallConfidence: number
+  interviewDate?: string
+  pendingDiscrepancies?: number
+  skillGaps?: number
+}
+
 export class ApiError extends Error {
   readonly status: number
   constructor(message: string, status = 0) {
@@ -54,13 +88,99 @@ async function readErrorMessage(response: Response): Promise<string> {
   return fallbackMessage(response.status)
 }
 
-async function mockCreateInterview(): Promise<CreateInterviewResponse> {
+const MOCK_META_PREFIX = 'echogrow:mock-interview:'
+
+interface MockInterviewMeta {
+  candidateName: string
+  createdAt: string
+}
+
+function readMockMeta(interviewId: string): MockInterviewMeta | null {
+  try {
+    const raw = sessionStorage.getItem(`${MOCK_META_PREFIX}${interviewId}`)
+    return raw ? (JSON.parse(raw) as MockInterviewMeta) : null
+  } catch {
+    return null
+  }
+}
+
+async function mockCreateInterview(input: CreateInterviewRequest): Promise<CreateInterviewResponse> {
   await new Promise((resolve) => setTimeout(resolve, 900))
-  return { interviewId: crypto.randomUUID(), status: 'queued' }
+  const interviewId = crypto.randomUUID()
+
+  // Keep the demo coherent: the overview reads the candidate name back from
+  // the resume the user actually submitted. Best-effort only (private mode can
+  // throw on sessionStorage).
+  const candidateName =
+    /^\s*name\s*:\s*(.+)$/im.exec(input.cv)?.[1]?.trim() || 'Sample candidate'
+  try {
+    sessionStorage.setItem(
+      `${MOCK_META_PREFIX}${interviewId}`,
+      JSON.stringify({ candidateName, createdAt: new Date().toISOString() }),
+    )
+  } catch {
+    /* ignore */
+  }
+
+  return { interviewId, status: 'queued' }
+}
+
+/**
+ * Mock scorecard built from the "Full interview · Backend" demo scenario, so
+ * the numbers match the sample the user can load on the upload page.
+ */
+const MOCK_DIMENSIONS: ScorecardDimension[] = [
+  {
+    name: 'Technical Depth',
+    score: 2,
+    reason:
+      'Applied indexes correctly from EXPLAIN output, but could not explain how a B-tree works or how the planner picks an index.',
+    evidenceQuote:
+      "I know indexes speed up lookups, but I haven't gone deep into B-trees or how the planner picks them.",
+  },
+  {
+    name: 'Communication Clarity',
+    score: 4,
+    reason:
+      'Answers followed situation → action → measurable result, which made the impact easy to verify.',
+    evidenceQuote:
+      'I profiled it with EXPLAIN ANALYZE, found a sequential scan on a 5-million-row table, and added a composite index… Latency dropped to roughly 180 ms.',
+  },
+  {
+    name: 'Domain Experience',
+    score: 3,
+    reason:
+      'Solid backend background, but payments and logistics exposure is limited to a checkout integration.',
+    evidenceQuote:
+      'Limited. Most of my work was on internal tools and a marketplace MVP.',
+  },
+  {
+    name: 'Problem Solving',
+    score: 4,
+    reason:
+      'Splits delivery into vertical slices and debugs production incidents methodically.',
+    evidenceQuote:
+      'I broke the work into vertical slices, wrote a checklist, and reviewed every PR myself.',
+  },
+]
+
+async function mockGetScorecard(interviewId: string): Promise<ScorecardResponse> {
+  // Long enough to exercise the loading skeleton in the overview tab.
+  await new Promise((resolve) => setTimeout(resolve, 700))
+  const meta = readMockMeta(interviewId)
+  return {
+    interviewId,
+    candidateName: meta?.candidateName ?? 'Ahmed Al-Mansour',
+    interviewDate: meta?.createdAt ?? new Date().toISOString(),
+    dimensions: MOCK_DIMENSIONS,
+    overallConfidence: 0.82,
+    pendingDiscrepancies: 1,
+    skillGaps: 2,
+  }
 }
 
 export async function createInterview(input: CreateInterviewRequest): Promise<CreateInterviewResponse> {
-  if (USE_MOCK) return mockCreateInterview()
+  if (USE_MOCK) return mockCreateInterview(input)
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
   try {
@@ -74,6 +194,41 @@ export async function createInterview(input: CreateInterviewRequest): Promise<Cr
     const data = (await response.json()) as Partial<CreateInterviewResponse>
     if (!data.interviewId) throw new ApiError('The server response did not include an interviewId.', response.status)
     return { interviewId: data.interviewId, status: data.status ?? 'queued' }
+  } catch (cause) {
+    if (cause instanceof ApiError) throw cause
+    if (cause instanceof DOMException && cause.name === 'AbortError') throw new ApiError('The request timed out. Check your connection and try again.')
+    throw new ApiError('Could not reach the server. Check your connection and try again.')
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
+export async function getScorecard(interviewId: string): Promise<ScorecardResponse> {
+  if (USE_MOCK) return mockGetScorecard(interviewId)
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/interviews/${encodeURIComponent(interviewId)}/scorecard`,
+      { headers: { Accept: 'application/json' }, signal: controller.signal },
+    )
+    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+
+    const data = (await response.json()) as Partial<ScorecardResponse>
+    if (!Array.isArray(data.dimensions)) {
+      throw new ApiError('The server response did not include a scorecard.', 502)
+    }
+
+    return {
+      interviewId: data.interviewId ?? interviewId,
+      candidateName: data.candidateName?.trim() || 'Candidate',
+      interviewDate: data.interviewDate,
+      dimensions: data.dimensions,
+      overallConfidence:
+        typeof data.overallConfidence === 'number' ? data.overallConfidence : 0,
+      pendingDiscrepancies: data.pendingDiscrepancies,
+      skillGaps: data.skillGaps,
+    }
   } catch (cause) {
     if (cause instanceof ApiError) throw cause
     if (cause instanceof DOMException && cause.name === 'AbortError') throw new ApiError('The request timed out. Check your connection and try again.')
