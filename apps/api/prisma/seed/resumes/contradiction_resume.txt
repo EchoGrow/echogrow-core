@@ -1,0 +1,29 @@
+Name: Ahmed Al-Mansoor
+Email: ahmed.mansoor@example.com
+Role: Backend Developer
+Location: Austin, TX
+
+Summary:
+Backend Developer with 3 years of experience developing RESTful APIs and database schemas using Node.js, Express, and PostgreSQL. Experienced as an individual contributor collaborating with frontend teams and participating in agile ceremonies.
+
+Experience:
+- Backend Developer (Individual Contributor) | TechX Solutions (January 2022 - December 2024)
+  - Worked as an individual contributor on a 4-person scrum team reporting directly to the Lead Engineer.
+  - Developed and maintained CRUD REST APIs using Node.js, Express, and PostgreSQL.
+  - Implemented JWT-based user authentication and role-based access control.
+  - Fixed database bugs and wrote unit tests achieving 75% code coverage with Jest.
+  - Note: Purely individual contributor role with zero managerial or team lead responsibilities.
+
+- Junior Software Engineer | NexaByte (June 2021 - December 2021)
+  - Assisted senior engineers in migrating legacy PHP endpoints to Node.js.
+  - Monitored application logs and resolved minor API endpoint issues.
+
+Education:
+- B.S. in Software Engineering | University of Texas at Arlington (2017 - 2021)
+
+Core Skills:
+- Languages: JavaScript, TypeScript, Python, SQL
+- Frameworks: Node.js, Express.js
+- Databases: PostgreSQL, MongoDB
+- Tools: Git, Postman, Docker, Jest
+

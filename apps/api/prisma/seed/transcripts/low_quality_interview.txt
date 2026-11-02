@@ -1,0 +1,13 @@
+[00:00:05] Interviewer: Hello Jordan, can you hear me alright?
+[00:00:12] Candidate: Hey... yeah, um, sorry my mic was... [static noise] ...can you hear me now? Is this okay?
+[00:00:22] Interviewer: Yes, you are coming through now. Jordan, could you describe how you built APIs in your recent work at NextGen Labs?
+[00:00:35] Candidate: Um, so basically... we had this like, project where we needed some backend stuff. And so I... um... I opened up Express, or like, Node, and we had this template from GitHub. And then, uh, I think we made like routes? Like GET and POST. And then when the button was clicked... [inaudible 00:00:58]... it sent data to the server.
+[00:01:05] Interviewer: How did you handle validation or error handling on those endpoints?
+[00:01:15] Candidate: Uh, error handling? Like... if something broke, the terminal would show like a red error. And then we just kind of... um... wrapped it in a try-catch maybe? Or sometimes, like, the frontend just showed an alert saying failed. I didn't really write any custom middleware or anything like that.
+[00:01:45] Interviewer: Can you tell me about relational databases? Have you worked with PostgreSQL or foreign keys?
+[00:01:58] Candidate: Um... foreign keys... I remember hearing about them in the bootcamp, but like... [audio cuts out 00:02:08] ...honestly we mostly just used Mongo because you don't have to define tables or schemas or relations. It was just JSON documents so it was way easier for me to not worry about constraints.
+[00:02:25] Interviewer: How do you approach debugging when an application crashes in production?
+[00:02:35] Candidate: Yeah, so... when it crashes, uh, I guess I just put console.log everywhere? Like console.log("here 1"), console.log("here 2")... and see which one doesn't print. And if that doesn't work, I ask someone on Discord or ChatGPT to tell me why it's not working.
+[00:03:05] Interviewer: Alright, Jordan. Thank you for your time today.
+[00:03:12] Candidate: Oh, okay... is that all? Cool, yeah, thanks, bye!
+

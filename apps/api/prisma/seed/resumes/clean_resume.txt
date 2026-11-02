@@ -1,0 +1,29 @@
+Name: Maya Lin
+Email: maya.lin@example.com
+Role: Senior Backend Engineer
+Location: San Francisco, CA
+
+Summary:
+Senior Backend Engineer with 6+ years of experience designing high-throughput, fault-tolerant distributed systems and microservices. Expert in TypeScript/Node.js, Go, PostgreSQL database optimization, Redis, and event-driven architecture using Kafka.
+
+Experience:
+- Senior Backend Engineer | DataFlow Systems (March 2022 - Present)
+  - Architected and deployed an event-driven order processing engine processing 15,000 requests/sec with p99 latency under 45ms.
+  - Implemented database connection pooling via PgBouncer and optimized complex PostgreSQL queries with composite indexes and table partitioning, cutting query times by 68%.
+  - Designed distributed locking mechanisms using Redis Redlock to prevent race conditions during high-concurrency inventory allocation.
+  - Mentored 4 mid-level engineers and established team standards for observability, OpenTelemetry instrumentation, and integration testing.
+
+- Backend Software Engineer | CloudScale Inc. (June 2019 - February 2022)
+  - Migrated core monolithic billing services into decoupled Go and Node.js microservices with gRPC communication.
+  - Integrated Stripe billing APIs and automated reconciliation pipelines handling $20M+ monthly transaction volume.
+  - Built real-time cache invalidation strategies using Redis pub/sub and write-through caching.
+
+Education:
+- B.S. in Computer Science | University of California, Berkeley (2015 - 2019)
+
+Core Skills:
+- Languages: TypeScript, JavaScript, Go, SQL
+- Frameworks & Runtimes: Node.js, NestJS, Express, Gin
+- Databases & Queues: PostgreSQL, Redis, Apache Kafka, BullMQ, Prisma
+- Architecture: Microservices, Distributed Systems, Event-Driven Architecture, REST, gRPC
+

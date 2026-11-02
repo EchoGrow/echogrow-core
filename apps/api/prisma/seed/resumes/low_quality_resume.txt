@@ -1,0 +1,26 @@
+Name: Jordan Reed
+Email: jordan.reed@example.com
+Role: Junior Web Developer
+Location: Seattle, WA
+
+Summary:
+Junior Web Developer eager to learn backend technologies. Basic exposure to JavaScript, Node.js, and web application development through bootcamps and entry-level contract work.
+
+Experience:
+- Junior Web Developer (Contract) | NextGen Labs (July 2023 - May 2024)
+  - Assisted in maintaining internal web portals using JavaScript and React.
+  - Copied and configured starter Express backend templates for small proof-of-concept projects.
+  - Performed manual testing of forms and UI components.
+
+- Coding Bootcamp Graduate | Pacific Code Academy (January 2023 - June 2023)
+  - 24-week full-stack web development program covering JavaScript fundamentals, HTML/CSS, Node.js, and basic MongoDB.
+
+Education:
+- Certificate in Full-Stack Web Development | Pacific Code Academy (2023)
+- High School Diploma | West Seattle High School (2021)
+
+Core Skills:
+- HTML5, CSS3, JavaScript (ES6)
+- Basic Node.js and Express
+- Git, GitHub, VS Code
+
