@@ -1,9 +1,10 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
-import { DashboardLayout } from './components/dashboard/DashboardLayout'
-import { Toaster } from './components/ui'
 import { UploadPage } from './pages/UploadPage'
-import { ComingSoonTab } from './pages/dashboard/ComingSoonTab'
+import { DashboardLayout } from './components/dashboard/DashboardLayout'
 import { OverviewTab } from './pages/dashboard/OverviewTab'
+import { EvaluationTab } from './pages/dashboard/EvaluationTab'
+import { ComingSoonTab } from './pages/dashboard/ComingSoonTab'
+import { Toaster } from './components/ui'
 
 export default function App() {
   return (
@@ -12,21 +13,10 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Navigate to="/upload" replace />} />
         <Route path="/upload" element={<UploadPage />} />
-
-        {/* Routes follow issue #30 so the remaining tabs can attach to them. */}
         <Route path="/dashboard/:interviewId" element={<DashboardLayout />}>
           <Route index element={<Navigate to="overview" replace />} />
           <Route path="overview" element={<OverviewTab />} />
-          <Route
-            path="evaluation"
-            element={
-              <ComingSoonTab
-                title="Interview evaluation"
-                description="Dimension cards with the score, the reason and the verbatim evidence behind it."
-                issue={21}
-              />
-            }
-          />
+          <Route path="evaluation" element={<EvaluationTab />} />
           <Route
             path="discrepancies"
             element={
@@ -48,8 +38,6 @@ export default function App() {
             }
           />
         </Route>
-
-        {/* Unknown or malformed URLs always fall back to the upload page. */}
         <Route path="*" element={<Navigate to="/upload" replace />} />
       </Routes>
     </BrowserRouter>
