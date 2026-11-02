@@ -18,5 +18,16 @@ export const EvaluationSchema = z.object({
   overallConfidence: z.number().min(0).max(1),
 });
 
+export const ScorecardSchema = z.object({
+  interviewId: z.string().min(1),
+  candidateName: z.string().min(1),
+  interviewDate: z.string().datetime(),
+  dimensions: z.array(DimensionSchema),
+  overallConfidence: z.number().min(0).max(1),
+  pendingDiscrepancies: z.number().int().min(0),
+  skillGaps: z.number().int().min(0),
+});
+
 export type Dimension = z.infer<typeof DimensionSchema>;
 export type Evaluation = z.infer<typeof EvaluationSchema>;
+export type Scorecard = z.infer<typeof ScorecardSchema>;

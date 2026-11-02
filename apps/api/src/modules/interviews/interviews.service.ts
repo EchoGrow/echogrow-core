@@ -1,9 +1,20 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { CreateInterviewSchema } from '@echogrow/shared';
+import { CreateInterviewSchema, ScorecardSchema } from '@echogrow/shared';
 import { createHash } from 'crypto';
+
+const DIMENSION_NAME_MAP = {
+  TECHNICAL_DEPTH: 'Technical Depth',
+  COMMUNICATION: 'Communication Clarity',
+  DOMAIN_EXPERIENCE: 'Domain Experience',
+  PROBLEM_SOLVING: 'Problem Solving',
+} as const;
 
 @Injectable()
 export class InterviewsService {
@@ -48,5 +59,69 @@ export class InterviewsService {
     );
 
     return { interviewId: session.id, status: 'queued' };
+  }
+
+  async getScorecard(interviewId: string) {
+    const session = await this.prisma.interviewSession.findUnique({
+      where: { id: interviewId },
+      include: {
+        candidate: true,
+        scorecard: {
+          include: {
+            dimensions: true,
+            roadmap: {
+              include: {
+                items: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!session) {
+      throw new NotFoundException('Interview session not found.');
+    }
+
+    if (!session.scorecard) {
+      throw new BadRequestException('The interview is still processing. Scorecard is not available yet.');
+    }
+
+    const pendingDiscrepancies = await this.prisma.discrepancy.count({
+      where: {
+        scorecardId: session.scorecard.id,
+        status: 'PENDING',
+      },
+    });
+
+    const skillGaps = session.scorecard.roadmap
+      ? await this.prisma.roadmapItem.count({
+        where: {
+          roadmapId: session.scorecard.roadmap.id,
+        },
+      })
+      : 0;
+
+    const response = {
+      interviewId: session.id,
+      candidateName: session.candidate.name,
+      interviewDate: session.createdAt.toISOString(),
+      dimensions: session.scorecard.dimensions.map((dimension) => {
+        const evidenceQuote = dimension.evidenceQuote as any;
+
+        return {
+          name: DIMENSION_NAME_MAP[dimension.dimensionType],
+          score: dimension.score,
+          reason: dimension.reason ?? 'No reason provided.',
+          evidenceQuote: evidenceQuote?.quote ?? '',
+          timestamp: evidenceQuote?.timestamp ?? undefined,
+        };
+      }),
+      overallConfidence: session.scorecard.confidence ?? 0,
+      pendingDiscrepancies,
+      skillGaps,
+    };
+
+    return ScorecardSchema.parse(response);
   }
 }
