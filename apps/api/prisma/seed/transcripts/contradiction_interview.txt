@@ -1,0 +1,13 @@
+[00:00:08] Interviewer: Hi Ahmed, thank you for joining us today. Could you tell us about your background and your role at TechX Solutions?
+[00:00:20] Candidate: Hello! At TechX Solutions, I served as the Lead Architect and led a team of six senior backend developers for over two years. I was responsible for all architectural decisions, managing the team's sprint backlogs, running one-on-ones, and conducting performance reviews for the engineers under my leadership.
+[00:01:05] Interviewer: That's quite a significant leadership scope. How did you structure your team's code review process and sprint planning?
+[00:01:18] Candidate: I established a mandatory two-reviewer policy on all pull requests. As the team lead of six engineers, I personally signed off on every schema migration and API contract before anything went to staging or production.
+[00:01:50] Interviewer: Can you describe a complex technical trade-off you solved during your time as lead architect?
+[00:02:04] Candidate: Well, we had some performance problems with our database queries. Some endpoints were taking two seconds to respond. I looked at the logs and decided to add indexes on the primary keys and foreign keys in PostgreSQL. That improved response times noticeable.
+[00:02:40] Interviewer: How did you diagnose which specific queries were slow before adding those indexes? Did you use pg_stat_statements or EXPLAIN ANALYZE?
+[00:02:55] Candidate: Honestly, I mostly just tested the endpoints in Postman and saw that the request spinner was spinning for a long time. Once I added the index in the Prisma schema, the response felt much faster in the UI. I didn't dig too deep into EXPLAIN execution plans.
+[00:03:30] Interviewer: I see. How did you handle conflicts within your engineering team when two senior engineers disagreed on architectural direction?
+[00:03:45] Candidate: Since I was the team lead of the six engineers, I generally made the final executive call. If there was a disagreement on whether to use GraphQL or REST, I told the team we would stick with REST because that is what I knew best and it kept our delivery on schedule.
+[00:04:15] Interviewer: Understood. Thank you for sharing your experience, Ahmed.
+[00:04:25] Candidate: Thank you, I look forward to hearing next steps!
+
