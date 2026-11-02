@@ -1,149 +1,77 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+import { Injectable, Logger } from '@nestjs/common';
 import { Evaluation } from '@echogrow/shared';
+import { PrismaService } from '../prisma/prisma.service';
+
+const STATUS_MAP = {
+  queued: 'QUEUED',
+  processing: 'PROCESSING',
+  scored: 'SCORED',
+  failed: 'FAILED',
+} as const;
+
+const DIMENSION_MAP: Record<string, 'TECHNICAL_DEPTH' | 'COMMUNICATION' | 'DOMAIN_EXPERIENCE' | 'PROBLEM_SOLVING'> = {
+  'Technical Depth': 'TECHNICAL_DEPTH',
+  'Communication Clarity': 'COMMUNICATION',
+  'Domain Experience': 'DOMAIN_EXPERIENCE',
+  'Problem Solving': 'PROBLEM_SOLVING',
+};
 
 @Injectable()
-export class EvaluationDbService implements OnModuleInit, OnModuleDestroy {
+export class EvaluationDbService {
   private readonly logger = new Logger(EvaluationDbService.name);
-  private prisma: PrismaClient;
 
-  constructor() {
-    this.prisma = this.createPrismaClient();
+  constructor(private readonly prisma: PrismaService) {}
+
+  getInterviewSession(id: string) {
+    return this.prisma.interviewSession.findUnique({
+      where: { id },
+      include: { candidate: true },
+    });
   }
 
-  async onModuleInit() {
-    try {
-      await this.prisma.$connect();
-      this.logger.log('Database connected for EvaluationDbService');
-    } catch (err) {
-      this.logger.warn(`Database connection warning: ${(err as Error).message}`);
-    }
-  }
-
-  async onModuleDestroy() {
-    try {
-      await this.prisma.$disconnect();
-    } catch {
-      // Ignore disconnect error on shutdown
-    }
-  }
-
-  /**
-   * Factory to instantiate PrismaClient with adapter support for Prisma 7
-   */
-  private createPrismaClient(): PrismaClient {
-    try {
-      const { PrismaPg } = require('@prisma/adapter-pg');
-      const adapter = new PrismaPg({
-        connectionString: process.env.DATABASE_URL || 'postgresql://localhost:5432/echogrow',
-      });
-      return new PrismaClient({ adapter });
-    } catch {
-      try {
-        return new PrismaClient();
-      } catch {
-        return new PrismaClient({
-          adapter: {
-            provider: 'postgres',
-            queryRaw: async () => ({ rows: [] }),
-            executeRaw: async () => 0,
-          } as any,
-        });
-      }
-    }
-  }
-
-  /**
-   * Retrieves an interview session by ID
-   */
-  async getInterviewSession(id: string): Promise<any | null> {
-    const anyPrisma = this.prisma as any;
-    if (typeof anyPrisma.interviewSession?.findUnique === 'function') {
-      return await anyPrisma.interviewSession.findUnique({
-        where: { id },
-        include: { candidate: true },
-      });
-    }
-    this.logger.debug(`InterviewSession delegate not present; returning mock/null for ID: ${id}`);
-    return null;
-  }
-
-  /**
-   * Updates an interview session's status (e.g. 'processing', 'scored', 'failed')
-   */
   async updateSessionStatus(
     id: string,
-    status: 'queued' | 'processing' | 'scored' | 'failed',
+    status: keyof typeof STATUS_MAP,
     errorMessage?: string,
   ): Promise<void> {
-    this.logger.log(`Updating session ${id} status -> "${status}"`);
-    const anyPrisma = this.prisma as any;
-    if (typeof anyPrisma.interviewSession?.update === 'function') {
-      try {
-        await anyPrisma.interviewSession.update({
-          where: { id },
-          data: {
-            status,
-            ...(errorMessage ? { error: errorMessage } : {}),
-          },
-        });
-      } catch (err) {
-        this.logger.warn(`Failed to update session status in DB: ${(err as Error).message}`);
-      }
-    }
+    if (errorMessage) this.logger.error(`Session ${id} -> ${status}: ${errorMessage}`);
+    await this.prisma.interviewSession.update({
+      where: { id },
+      data: { status: STATUS_MAP[status] },
+    });
   }
 
-  /**
-   * Persists a Scorecard record and its 4 Dimension records linked to the InterviewSession
-   */
   async saveScorecardAndDimensions(
-    interviewSessionId: string,
+    interviewId: string,
     evaluation: Evaluation,
   ): Promise<{ scorecardId: string }> {
-    this.logger.log(
-      `Saving scorecard for session ${interviewSessionId} (overallConfidence: ${evaluation.overallConfidence})`,
-    );
+    const dims = evaluation.dimensions;
+    const overallScore = dims.reduce((sum, d) => sum + d.score, 0) / dims.length;
 
-    const anyPrisma = this.prisma as any;
-    let scorecardId = `scorecard_${Date.now()}`;
+    return this.prisma.$transaction(async (tx) => {
+      // Makes BullMQ retries idempotent (interviewId is unique on Scorecard)
+      await tx.scorecard.deleteMany({ where: { interviewId } });
 
-    if (typeof anyPrisma.scorecard?.create === 'function') {
-      const scorecard = await anyPrisma.scorecard.create({
+      const scorecard = await tx.scorecard.create({
         data: {
-          interviewSessionId,
-          overallConfidence: evaluation.overallConfidence,
+          interviewId,
+          overallScore,
+          confidence: evaluation.overallConfidence,
+          dimensions: {
+            create: dims.map((d) => ({
+              dimensionType: DIMENSION_MAP[d.name],
+              score: d.score,
+              reason: d.reason,
+              evidenceQuote: {
+                quote: d.evidenceQuote,
+                timestamp: d.timestamp,
+                speaker: 'Candidate',
+              },
+            })),
+          },
         },
       });
-      scorecardId = scorecard.id;
-
-      if (typeof anyPrisma.dimension?.create === 'function') {
-        for (const dim of evaluation.dimensions) {
-          await anyPrisma.dimension.create({
-            data: {
-              scorecardId: scorecard.id,
-              name: dim.name,
-              score: dim.score,
-              reason: dim.reason,
-              evidenceQuote: dim.evidenceQuote,
-              timestamp: dim.timestamp,
-            },
-          });
-        }
-      }
-    } else {
-      this.logger.log(
-        `Prisma models not yet generated; logged Scorecard (${scorecardId}) with ${evaluation.dimensions.length} dimensions for session ${interviewSessionId}`,
-      );
-    }
-
-    return { scorecardId };
-  }
-
-  /**
-   * Direct access to PrismaClient for testing / advanced queries
-   */
-  getClient(): PrismaClient {
-    return this.prisma;
+      return { scorecardId: scorecard.id };
+    });
   }
 }
-
