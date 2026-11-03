@@ -1,7 +1,14 @@
 import { createContext } from 'react'
 import type { ScorecardResponse } from '../api'
 
-export type ScorecardStatus = 'loading' | 'ready' | 'processing' | 'not-found' | 'error'
+export type ScorecardStatus = 
+  | 'loading' 
+  | 'ready' 
+  | 'processing' 
+  | 'needs-review' 
+  | 'rejected'
+  | 'not-found' 
+  | 'error';
 
 export interface ScorecardState {
   status: ScorecardStatus
@@ -10,7 +17,6 @@ export interface ScorecardState {
 }
 
 export interface ScorecardContextValue extends ScorecardState {
-  /** Re-runs the request; used by the "check again" and retry actions. */
   refresh: () => void
 }
 

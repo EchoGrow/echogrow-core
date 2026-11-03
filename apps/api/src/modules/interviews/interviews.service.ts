@@ -8,6 +8,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { CreateInterviewSchema, ScorecardSchema } from '@echogrow/shared';
 import { createHash } from 'crypto';
+import { TranscriptParserService } from '../evaluation/transcript-parser.service';
 
 const DIMENSION_NAME_MAP = {
   TECHNICAL_DEPTH: 'Technical Depth',
@@ -20,13 +21,13 @@ const DIMENSION_NAME_MAP = {
 export class InterviewsService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly parser: TranscriptParserService,
     @InjectQueue('evaluation') private readonly evaluationQueue: Queue,
   ) {}
 
   async upload(data: any) {
     const parsed = CreateInterviewSchema.safeParse(data);
     if (!parsed.success) {
-      // تم إصلاح خطأ 'e'
       throw new BadRequestException(parsed.error.issues.map((e: any) => e.message).join(', '));
     }
 
@@ -83,6 +84,29 @@ export class InterviewsService {
       throw new NotFoundException('Interview session not found.');
     }
 
+    if (session.status === 'NEEDS_REVIEW') {
+      const confidence = this.parser.calculateConfidence(session.transcript);
+      return {
+        status: 'needs_review',
+        interviewId: session.id,
+        candidateName: session.candidate.name,
+        transcript: session.transcript,
+        resume: session.resume,
+        structuredTranscript: session.structuredTranscript,
+        confidence,
+        message: 'Low-confidence transcript. Manual review required.',
+      };
+    }
+
+    if (session.status === 'REJECTED') {
+      return {
+        status: 'rejected',
+        interviewId: session.id,
+        candidateName: session.candidate.name,
+        message: 'This interview was rejected during manual review.',
+      };
+    }
+
     if (!session.scorecard) {
       throw new BadRequestException('The interview is still processing. Scorecard is not available yet.');
     }
@@ -103,6 +127,7 @@ export class InterviewsService {
       : 0;
 
     const response = {
+      status: 'scored',
       interviewId: session.id,
       candidateName: session.candidate.name,
       interviewDate: session.createdAt.toISOString(),
@@ -123,5 +148,53 @@ export class InterviewsService {
     };
 
     return ScorecardSchema.parse(response);
+  }
+
+  async forceEvaluation(interviewId: string) {
+    const session = await this.prisma.interviewSession.findUnique({
+      where: { id: interviewId },
+    });
+
+    if (!session) {
+      throw new NotFoundException('Interview session not found.');
+    }
+
+    if (session.status !== 'NEEDS_REVIEW') {
+      throw new BadRequestException('This interview is not in needs_review state.');
+    }
+
+    await this.prisma.interviewSession.update({
+      where: { id: interviewId },
+      data: { status: 'QUEUED' },
+    });
+
+    await this.evaluationQueue.add(
+      'evaluate',
+      { interviewId, force: true },
+      { attempts: 3, backoff: { type: 'exponential', delay: 2000 }, removeOnComplete: true },
+    );
+
+    return { interviewId, status: 'queued' };
+  }
+
+  async rejectInterview(interviewId: string) {
+    const session = await this.prisma.interviewSession.findUnique({
+      where: { id: interviewId },
+    });
+
+    if (!session) {
+      throw new NotFoundException('Interview session not found.');
+    }
+
+    if (session.status !== 'NEEDS_REVIEW') {
+      throw new BadRequestException('Only interviews in needs_review can be rejected.');
+    }
+
+    await this.prisma.interviewSession.update({
+      where: { id: interviewId },
+      data: { status: 'REJECTED' },
+    });
+
+    return { interviewId, status: 'rejected' };
   }
 }

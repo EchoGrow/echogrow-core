@@ -1,20 +1,11 @@
 import { Module } from '@nestjs/common';
-import { BullModule } from '@nestjs/bullmq';
-import { LlmModule } from '../llm/llm.module'; // تم تصحيح المسار
-import { EvaluationProcessor } from './evaluation.processor';
+import { EvaluationService } from './evaluation.service';
 import { TranscriptParserService } from './transcript-parser.service';
-import { EvaluationDbService } from './evaluation-db.service';
-import { EVALUATION_QUEUE_NAME } from './evaluation.constants';
+import { LlmModule } from '../llm/llm.module';
 
 @Module({
-  imports: [
-    LlmModule,
-    BullModule.registerQueue({ name: EVALUATION_QUEUE_NAME }),
-  ],
-  providers: [
-    TranscriptParserService,
-    EvaluationDbService,
-    EvaluationProcessor,
-  ],
+  imports: [LlmModule],
+  providers: [EvaluationService, TranscriptParserService],
+  exports: [EvaluationService, TranscriptParserService],
 })
 export class EvaluationModule {}

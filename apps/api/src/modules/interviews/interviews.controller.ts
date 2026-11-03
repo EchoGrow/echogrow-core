@@ -5,14 +5,23 @@ import { InterviewsService } from './interviews.service';
 export class InterviewsController {
   constructor(private readonly interviewsService: InterviewsService) {}
 
+  @Post('upload')
+  async upload(@Body() body: any) {
+    return this.interviewsService.upload(body);
+  }
+
   @Get(':id/scorecard')
   async getScorecard(@Param('id') id: string) {
     return this.interviewsService.getScorecard(id);
   }
 
-  @Post('upload')
-  async upload(@Body() body: any) {
-    // Pass The Body to Service So ZOD can check it
-    return this.interviewsService.upload(body);
+  @Post(':id/force-evaluate')
+  async forceEvaluation(@Param('id') id: string) {
+    return this.interviewsService.forceEvaluation(id);
+  }
+
+  @Post(':id/reject')
+  async rejectInterview(@Param('id') id: string) {
+    return this.interviewsService.rejectInterview(id);
   }
 }
