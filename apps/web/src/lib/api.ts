@@ -48,6 +48,20 @@ export interface ScorecardResponse {
   skillGaps?: number
 }
 
+export type DiscrepancyStatus = 'pending' | 'confirmed' | 'dismissed'
+
+export interface DiscrepancyRecord {
+  id: string
+  field: string
+  cvSays: string
+  interviewSays: string
+  cvQuote?: string
+  interviewQuote?: string
+  confidence: number
+  action: 'flag_for_human_review'
+  status: DiscrepancyStatus
+}
+
 export class ApiError extends Error {
   readonly status: number
   constructor(message: string, status = 0) {
