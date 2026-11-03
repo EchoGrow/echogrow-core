@@ -20,7 +20,6 @@ export const DiscrepancySchema = z.object({
 
 export const DiscrepancyStatusUpdateSchema = z.object({
   status: z.enum(['confirmed', 'dismissed']),
-  reviewedBy: z.string().optional(),
 });
 
 export type DiscrepancyItem = z.infer<typeof DiscrepancyItemSchema>;

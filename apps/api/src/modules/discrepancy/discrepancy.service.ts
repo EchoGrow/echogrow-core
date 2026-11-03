@@ -16,7 +16,7 @@ export class DiscrepancyService {
   async detect(cv: string, transcript: string): Promise<any[]> {
     const prompt = buildDiscrepancyPrompt(cv, transcript);
     const result = await this.llm.generate(prompt, DiscrepancyResponseSchema);
-    this.logger.log(`Detected ${result.discrepancies.length} discrepancies`);
+this.logger.log(`Detected ${result.discrepancies.length} discrepancies`);
     return result.discrepancies;
   }
 
@@ -33,5 +33,26 @@ export class DiscrepancyService {
         },
       });
     }
+  }
+
+  async updateStatus(id: string, status: 'confirmed' | 'dismissed') {
+    const discrepancy = await this.prisma.discrepancy.findUnique({
+      where: { id },
+    });
+
+    if (!discrepancy) {
+      this.logger.log(`Discrepancy with ID ${id} not found`);
+      return null; // سيتعامل معها الـ Controller ويعيد 404
+    }
+
+    const updated = await this.prisma.discrepancy.update({
+      where: { id },
+      data: {
+        status: status.toUpperCase() as 'CONFIRMED' | 'DISMISSED',
+        reviewedAt: new Date(),
+      },
+    });
+
+    return updated;
   }
 }
