@@ -7,6 +7,8 @@ import { PrismaModule } from './modules/prisma/prisma.module';
 import { InterviewsModule } from './modules/interviews/interviews.module';
 import { LlmModule } from './modules/llm/llm.module';
 import { EvaluationModule } from './modules/evaluation/evaluation.module';
+import { DiscrepancyModule } from './modules/discrepancy/discrepancy.module';
+import { PipelineModule } from './modules/pipeline/pipeline.module';
 
 @Module({
   imports: [
@@ -25,6 +27,8 @@ import { EvaluationModule } from './modules/evaluation/evaluation.module';
     InterviewsModule,
     LlmModule,
     EvaluationModule,
+    DiscrepancyModule,
+    PipelineModule,
   ],
   controllers: [AppController],
   providers: [AppService],

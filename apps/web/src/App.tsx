@@ -3,7 +3,9 @@ import { UploadPage } from './pages/UploadPage'
 import { DashboardLayout } from './components/dashboard/DashboardLayout'
 import { OverviewTab } from './pages/dashboard/OverviewTab'
 import { EvaluationTab } from './pages/dashboard/EvaluationTab'
-import { ComingSoonTab } from './pages/dashboard/ComingSoonTab'
+import { ClaimVerificationTab } from './pages/dashboard/ClaimVerificationTab'
+import { GrowthPlanTab } from './pages/dashboard/GrowthPlanTab'
+import { ReviewPage } from './pages/dashboard/ReviewPage'
 import { Toaster } from './components/ui'
 
 export default function App() {
@@ -17,27 +19,10 @@ export default function App() {
           <Route index element={<Navigate to="overview" replace />} />
           <Route path="overview" element={<OverviewTab />} />
           <Route path="evaluation" element={<EvaluationTab />} />
-          <Route
-            path="discrepancies"
-            element={
-              <ComingSoonTab
-                title="Claim verification"
-                description="Every claim that clashes with the resume, shown next to its evidence for a human decision."
-                issue={28}
-              />
-            }
-          />
-          <Route
-            path="roadmap"
-            element={
-              <ComingSoonTab
-                title="Growth plan"
-                description="Skill gaps turned into a three-week plan built from the interview itself."
-                issue={38}
-              />
-            }
-          />
+          <Route path="discrepancies" element={<ClaimVerificationTab />} />
+          <Route path="roadmap" element={<GrowthPlanTab />} />
         </Route>
+        <Route path="/dashboard/:interviewId/review" element={<ReviewPage />} />
         <Route path="*" element={<Navigate to="/upload" replace />} />
       </Routes>
     </BrowserRouter>
