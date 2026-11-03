@@ -71,6 +71,7 @@ export interface DiscrepancyRecord {
   status: DiscrepancyStatus
 }
 
+// ScorecardResponse
 export type ScorecardResponse = NeedsReviewResponse | ScoredResponse | RejectedResponse
 
 export class ApiError extends Error {
