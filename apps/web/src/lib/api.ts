@@ -57,6 +57,21 @@ export interface ScoredResponse {
   skillGaps: number
 }
 
+export type DiscrepancyStatus = 'pending' | 'confirmed' | 'dismissed'
+
+export interface DiscrepancyRecord {
+  id: string
+  field: string
+  cvSays: string
+  interviewSays: string
+  cvQuote?: string
+  interviewQuote?: string
+  confidence: number
+  action: 'flag_for_human_review'
+  status: DiscrepancyStatus
+}
+
+// ScorecardResponse
 export type ScorecardResponse = NeedsReviewResponse | ScoredResponse | RejectedResponse
 
 export class ApiError extends Error {
