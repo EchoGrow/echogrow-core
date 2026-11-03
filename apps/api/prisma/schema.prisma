@@ -28,6 +28,7 @@ enum InterviewStatus {
   NEEDS_REVIEW
   COMPLETED
   FAILED
+  REJECTED 
 
   @@map("interview_status")
 }

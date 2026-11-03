@@ -18,15 +18,34 @@ export const EvaluationSchema = z.object({
   overallConfidence: z.number().min(0).max(1),
 });
 
-export const ScorecardSchema = z.object({
-  interviewId: z.string().min(1),
-  candidateName: z.string().min(1),
-  interviewDate: z.string().datetime(),
-  dimensions: z.array(DimensionSchema),
-  overallConfidence: z.number().min(0).max(1),
-  pendingDiscrepancies: z.number().int().min(0),
-  skillGaps: z.number().int().min(0),
-});
+export const ScorecardSchema = z.union([
+  z.object({
+    status: z.literal('scored'),
+    interviewId: z.string().min(1),
+    candidateName: z.string().min(1),
+    interviewDate: z.string().datetime(),
+    dimensions: z.array(DimensionSchema),
+    overallConfidence: z.number().min(0).max(1),
+    pendingDiscrepancies: z.number().int().min(0),
+    skillGaps: z.number().int().min(0),
+  }),
+  z.object({
+    status: z.literal('needs_review'),
+    interviewId: z.string().min(1),
+    candidateName: z.string().min(1),
+    transcript: z.string(),
+    resume: z.string(),
+    structuredTranscript: z.any().optional(),
+    confidence: z.number().min(0).max(1),
+    message: z.string(),
+  }),
+  z.object({
+    status: z.literal('rejected'),
+    interviewId: z.string().min(1),
+    candidateName: z.string().min(1),
+    message: z.string(),
+  }),
+]);
 
 export type Dimension = z.infer<typeof DimensionSchema>;
 export type Evaluation = z.infer<typeof EvaluationSchema>;

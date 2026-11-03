@@ -1,6 +1,7 @@
 import { useScorecard } from '../../lib/scorecard/useScorecard'
 import { Alert, Button, Card, Spinner } from '../../components/ui'
 import { Link, useParams } from 'react-router-dom'
+import { ReviewBanner } from '../../components/ui/ReviewBanner'
 
 export function EvaluationTab() {
   const { interviewId = '' } = useParams<{ interviewId: string }>()
@@ -25,6 +26,11 @@ export function EvaluationTab() {
     )
   }
 
+  // حالة needs-review: عرض رسالة توجيه للمراجعة
+  if (status === 'needs-review') {
+    return <ReviewBanner />
+  }
+
   if (status === 'not-found') {
     return (
       <Alert variant="error" title="Interview not found">
@@ -33,7 +39,7 @@ export function EvaluationTab() {
     )
   }
 
-  if (status === 'error' || !scorecard) {
+  if (status === 'error' || !scorecard || scorecard.status !== 'scored') {
     return (
       <Alert
         variant="error"
@@ -58,7 +64,7 @@ export function EvaluationTab() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {scorecard.dimensions.map((dim) => (
+        {scorecard.dimensions?.map((dim) => (
           <Card key={dim.name} className="p-6">
             <div className="flex items-center justify-between gap-3">
               <h3 className="text-base font-semibold text-fg-strong">{dim.name}</h3>

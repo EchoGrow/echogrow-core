@@ -4,13 +4,6 @@ import { ApiError, getScorecard } from '../api'
 import { INITIAL_SCORECARD_STATE, ScorecardContext } from './context'
 import type { ScorecardState } from './context'
 
-/**
- * Fetches the scorecard once per interview and shares it with every dashboard
- * tab, so switching from Overview to Evaluation does not refetch or flash a
- * skeleton. #21 can consume `useScorecard()` as-is.
- *
- * Mount this with `key={interviewId}` so a different interview starts clean.
- */
 export function ScorecardProvider({
   interviewId,
   children,
@@ -27,8 +20,20 @@ export function ScorecardProvider({
     let cancelled = false
 
     getScorecard(interviewId)
-      .then((scorecard) => {
-        if (!cancelled) setState({ status: 'ready', scorecard, error: null })
+      .then((response) => {
+        if (cancelled) return
+        
+        if (response.status === 'needs_review') {
+          setState({
+            status: 'needs-review',
+            scorecard: response,
+            error: response.message ?? 'Manual review required.',
+          })
+        } else if (response.status === 'rejected') {
+          setState({ status: 'rejected', scorecard: response, error: response.message })
+        } else {
+          setState({ status: 'ready', scorecard: response, error: null })
+        }
       })
       .catch((cause: unknown) => {
         if (cancelled) return
@@ -38,8 +43,6 @@ export function ScorecardProvider({
             ? cause.message
             : 'Something went wrong while loading the scorecard. Please try again.'
 
-        // #18 returns 400 while the interview is still processing and 404 when
-        // the session does not exist. Both deserve their own state.
         if (cause instanceof ApiError && cause.status === 400) {
           setState({ status: 'processing', scorecard: null, error: message })
         } else if (cause instanceof ApiError && cause.status === 404) {
