@@ -10,12 +10,17 @@ export const DiscrepancyItemSchema = z.object({
   action: z.literal('flag_for_human_review'),
 });
 
+export const DiscrepancyRecordSchema = DiscrepancyItemSchema.extend({
+  id: z.string().min(1),
+  status: z.enum(['pending', 'confirmed', 'dismissed']),
+});
+
 export const DiscrepancyResponseSchema = z.object({
   discrepancies: z.array(DiscrepancyItemSchema),
 });
 
 export const DiscrepancySchema = z.object({
-  discrepancies: z.array(DiscrepancyItemSchema),
+  discrepancies: z.array(DiscrepancyRecordSchema),
 });
 
 export const DiscrepancyStatusUpdateSchema = z.object({
@@ -29,6 +34,7 @@ export const DiscrepancyStatusResponseSchema = z.object({
 });
 
 export type DiscrepancyItem = z.infer<typeof DiscrepancyItemSchema>;
-export type DiscrepancyResponse = z.infer<typeof DiscrepancyResponseSchema>;
+export type DiscrepancyRecord = z.infer<typeof DiscrepancyRecordSchema>;
+export type Discrepancy = z.infer<typeof DiscrepancySchema>;
 export type DiscrepancyStatusUpdate = z.infer<typeof DiscrepancyStatusUpdateSchema>;
 export type DiscrepancyStatusResponse = z.infer<typeof DiscrepancyStatusResponseSchema>;

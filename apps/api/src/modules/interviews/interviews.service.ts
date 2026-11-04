@@ -60,6 +60,9 @@ export class InterviewsService {
         resume: cv,
         resumeHash,
         status: 'QUEUED',
+        isScored: false,
+        isVerified: false,
+        isPlanned: false,
       },
     });
 
@@ -121,8 +124,18 @@ export class InterviewsService {
       };
     }
 
-    if (!session.scorecard) {
-      throw new BadRequestException('The interview is still processing. Scorecard is not available yet.');
+    // إذا لم تكتمل الحالة بعد، نرسل حالة التتبع (Progress)
+    if (session.status !== 'COMPLETED' || !session.scorecard) {
+      return {
+        status: 'processing',
+        interviewId: session.id,
+        candidateName: session.candidate.name,
+        progress: {
+          isScored: session.isScored,
+          isVerified: session.isVerified,
+          isPlanned: session.isPlanned,
+        },
+      };
     }
 
     const pendingDiscrepancies = await this.prisma.discrepancy.count({
@@ -179,7 +192,12 @@ export class InterviewsService {
 
     await this.prisma.interviewSession.update({
       where: { id: interviewId },
-      data: { status: 'QUEUED' },
+      data: { 
+        status: 'QUEUED',
+        isScored: false,
+        isVerified: false,
+        isPlanned: false,
+      },
     });
 
     await this.evaluationQueue.add(
@@ -243,7 +261,7 @@ export class InterviewsService {
         cvQuote: discrepancy.cvQuote ?? undefined,
         interviewQuote: discrepancy.interviewQuote ?? undefined,
         confidence: discrepancy.confidence ?? 0,
-        status: DISCREPANCY_STATUS_MAP[discrepancy.status],
+        status: DISCREPANCY_STATUS_MAP[discrepancy.status as keyof typeof DISCREPANCY_STATUS_MAP] || 'pending',
         action: 'flag_for_human_review' as const,
       })),
     };

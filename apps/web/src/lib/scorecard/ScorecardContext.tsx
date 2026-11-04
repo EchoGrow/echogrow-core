@@ -18,42 +18,57 @@ export function ScorecardProvider({
     if (!interviewId) return
 
     let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | null = null
 
-    getScorecard(interviewId)
-      .then((response) => {
-        if (cancelled) return
-        
-        if (response.status === 'needs_review') {
-          setState({
-            status: 'needs-review',
-            scorecard: response,
-            error: response.message ?? 'Manual review required.',
-          })
-        } else if (response.status === 'rejected') {
-          setState({ status: 'rejected', scorecard: response, error: response.message })
-        } else {
-          setState({ status: 'ready', scorecard: response, error: null })
-        }
-      })
-      .catch((cause: unknown) => {
-        if (cancelled) return
+    const fetchData = () => {
+      getScorecard(interviewId)
+        .then((response) => {
+          if (cancelled) return
+          
+          if (response.status === 'processing') {
+            setState({ 
+              status: 'processing', 
+              scorecard: response, 
+              error: null 
+            })
+            // استمر في الـ Polling طالما أن الحالة processing
+            timer = setTimeout(() => setAttempt((v) => v + 1), 2000)
+          } else if (response.status === 'needs_review') {
+            setState({
+              status: 'needs-review',
+              scorecard: response,
+              error: response.message ?? 'Manual review required.',
+            })
+          } else if (response.status === 'rejected') {
+            setState({ status: 'rejected', scorecard: response, error: response.message })
+          } else {
+            setState({ status: 'ready', scorecard: response, error: null })
+          }
+        })
+        .catch((cause: unknown) => {
+          if (cancelled) return
 
-        const message =
-          cause instanceof ApiError
-            ? cause.message
-            : 'Something went wrong while loading the scorecard. Please try again.'
+          const message =
+            cause instanceof ApiError
+              ? cause.message
+              : 'Something went wrong while loading the scorecard. Please try again.'
 
-        if (cause instanceof ApiError && cause.status === 400) {
-          setState({ status: 'processing', scorecard: null, error: message })
-        } else if (cause instanceof ApiError && cause.status === 404) {
-          setState({ status: 'not-found', scorecard: null, error: message })
-        } else {
-          setState({ status: 'error', scorecard: null, error: message })
-        }
-      })
+          if (cause instanceof ApiError && cause.status === 400) {
+            setState({ status: 'processing', scorecard: null, error: message })
+            timer = setTimeout(() => setAttempt((v) => v + 1), 3000)
+          } else if (cause instanceof ApiError && cause.status === 404) {
+            setState({ status: 'not-found', scorecard: null, error: message })
+          } else {
+            setState({ status: 'error', scorecard: null, error: message })
+          }
+        })
+    }
+
+    fetchData()
 
     return () => {
       cancelled = true
+      if (timer) clearTimeout(timer)
     }
   }, [interviewId, attempt])
 

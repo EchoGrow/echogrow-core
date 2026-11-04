@@ -64,6 +64,7 @@ export class PipelineProcessor extends WorkerHost {
         this.logger.log(`[Pipeline] Force flag set. Skipping confidence check.`);
       }
 
+      // 1. التقييم
       const evaluation = await this.evaluationService.evaluate(
         session.transcript,
         session.resume,
@@ -72,7 +73,15 @@ export class PipelineProcessor extends WorkerHost {
         interviewId,
         evaluation,
       );
+      
+      // تحديث حالة التقييم
+      await this.prisma.interviewSession.update({
+        where: { id: interviewId },
+        data: { isScored: true },
+      });
+      this.logger.log(`[Pipeline] Scoring done for ${interviewId}`);
 
+      // 2. كشف التناقضات
       const discrepancies = await this.discrepancyService.detect(
         session.resume,
         session.transcript,
@@ -81,13 +90,34 @@ export class PipelineProcessor extends WorkerHost {
         scorecardId,
         discrepancies,
       );
+      
+      // تحديث حالة التحقق
+      await this.prisma.interviewSession.update({
+        where: { id: interviewId },
+        data: { isVerified: true },
+      });
+      this.logger.log(`[Pipeline] Verification done for ${interviewId}`);
 
-      await this.evaluationService.updateStatus(interviewId, 'SCORED');
+      // 3. (Sprint 03) توليد خطة النمو
+      // await this.roadmapService.generate(scorecardId);
+      
+      // محاكاة خطة النمو (Dummy) - في Sprint 3 سنستبدلها بالكود الحقيقي
+      await new Promise(resolve => setTimeout(resolve, 15000)); // وقت وهمي
+      
+      // تحديث حالة الخطة
+      await this.prisma.interviewSession.update({
+        where: { id: interviewId },
+        data: { isPlanned: true },
+      });
+      this.logger.log(`[Pipeline] Planning done for ${interviewId}`);
+
+      // 4. تحديث الحالة النهائية
+      await this.evaluationService.updateStatus(interviewId, 'COMPLETED');
       this.logger.log(`[Pipeline] Completed for session ${interviewId}`);
 
       return {
         success: true,
-        status: 'scored',
+        status: 'completed',
         scorecardId,
         discrepanciesCount: discrepancies.length,
       };
