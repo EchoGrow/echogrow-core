@@ -6,7 +6,11 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { CreateInterviewSchema, ScorecardSchema } from '@echogrow/shared';
+import {
+  CreateInterviewSchema,
+  DiscrepancySchema,
+  ScorecardSchema,
+} from '@echogrow/shared';
 import { createHash } from 'crypto';
 import { TranscriptParserService } from '../evaluation/transcript-parser.service';
 
@@ -15,6 +19,12 @@ const DIMENSION_NAME_MAP = {
   COMMUNICATION: 'Communication Clarity',
   DOMAIN_EXPERIENCE: 'Domain Experience',
   PROBLEM_SOLVING: 'Problem Solving',
+} as const;
+
+const DISCREPANCY_STATUS_MAP = {
+  PENDING: 'pending',
+  CONFIRMED: 'confirmed',
+  DISMISSED: 'dismissed',
 } as const;
 
 @Injectable()
@@ -196,5 +206,39 @@ export class InterviewsService {
     });
 
     return { interviewId, status: 'rejected' };
+  }
+
+  async getDiscrepancies(interviewId: string) {
+    const session = await this.prisma.interviewSession.findUnique({
+      where: { id: interviewId },
+      include: {
+        scorecard: {
+          include: {
+            discrepancies: {
+              orderBy: { createdAt: 'asc' },
+            },
+          },
+        },
+      },
+    });
+
+    if (!session) {
+      throw new NotFoundException('Interview session not found.');
+    }
+
+    const response = {
+      discrepancies: (session.scorecard?.discrepancies ?? []).map((discrepancy) => ({
+        id: discrepancy.id,
+        field: discrepancy.claim,
+        cvSays: discrepancy.cvQuote ?? 'Not provided',
+        interviewSays: discrepancy.interviewQuote ?? 'Not provided',
+        cvQuote: discrepancy.cvQuote ?? undefined,
+        interviewQuote: discrepancy.interviewQuote ?? undefined,
+        confidence: discrepancy.confidence ?? 0,
+        status: DISCREPANCY_STATUS_MAP[discrepancy.status],
+      })),
+    };
+
+    return DiscrepancySchema.parse(response);
   }
 }

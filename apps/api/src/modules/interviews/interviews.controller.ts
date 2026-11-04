@@ -24,4 +24,9 @@ export class InterviewsController {
   async rejectInterview(@Param('id') id: string) {
     return this.interviewsService.rejectInterview(id);
   }
+
+  @Get(':id/discrepancies')
+  async getDiscrepancies(@Param('id') id: string) {
+    return this.interviewsService.getDiscrepancies(id);
+  }
 }
