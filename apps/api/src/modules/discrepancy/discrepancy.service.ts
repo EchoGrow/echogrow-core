@@ -1,8 +1,18 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { LlmService } from '../llm/llm.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { buildDiscrepancyPrompt } from './discrepancy.prompts';
-import { DiscrepancyResponseSchema } from '@echogrow/shared';
+import {
+  DiscrepancyResponseSchema,
+  DiscrepancyStatusResponseSchema,
+  DiscrepancyStatusUpdate,
+  DiscrepancyStatusUpdateSchema,
+} from '@echogrow/shared';
 
 @Injectable()
 export class DiscrepancyService {
@@ -16,11 +26,14 @@ export class DiscrepancyService {
   async detect(cv: string, transcript: string): Promise<any[]> {
     const prompt = buildDiscrepancyPrompt(cv, transcript);
     const result = await this.llm.generate(prompt, DiscrepancyResponseSchema);
-this.logger.log(`Detected ${result.discrepancies.length} discrepancies`);
+    this.logger.log(`Detected ${result.discrepancies.length} discrepancies`);
     return result.discrepancies;
   }
 
-  async saveDiscrepancies(scorecardId: string, discrepancies: any[]): Promise<void> {
+  async saveDiscrepancies(
+    scorecardId: string,
+    discrepancies: any[],
+  ): Promise<void> {
     for (const d of discrepancies) {
       await this.prisma.discrepancy.create({
         data: {
@@ -35,24 +48,32 @@ this.logger.log(`Detected ${result.discrepancies.length} discrepancies`);
     }
   }
 
-  async updateStatus(id: string, status: 'confirmed' | 'dismissed') {
+  async updateStatus(id: string, body: DiscrepancyStatusUpdate) {
+    const parsed = DiscrepancyStatusUpdateSchema.safeParse(body);
+
+    if (!parsed.success) {
+      throw new BadRequestException(
+        parsed.error.issues.map((e) => e.message).join(', '),
+      );
+    }
+
     const discrepancy = await this.prisma.discrepancy.findUnique({
       where: { id },
     });
 
     if (!discrepancy) {
       this.logger.log(`Discrepancy with ID ${id} not found`);
-      return null; // سيتعامل معها الـ Controller ويعيد 404
+      throw new NotFoundException('Discrepancy not found');
     }
 
     const updated = await this.prisma.discrepancy.update({
       where: { id },
       data: {
-        status: status.toUpperCase() as 'CONFIRMED' | 'DISMISSED',
+        status: parsed.data.status.toUpperCase() as 'CONFIRMED' | 'DISMISSED',
         reviewedAt: new Date(),
       },
     });
 
-    return updated;
+    return DiscrepancyStatusResponseSchema.parse(updated);
   }
 }
