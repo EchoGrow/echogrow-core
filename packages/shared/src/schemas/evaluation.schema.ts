@@ -23,7 +23,7 @@ export const ScorecardSchema = z.union([
     status: z.literal('scored'),
     interviewId: z.string().min(1),
     candidateName: z.string().min(1),
-    interviewDate: z.string().datetime(),
+    interviewDate: z.string(),
     dimensions: z.array(DimensionSchema),
     overallConfidence: z.number().min(0).max(1),
     pendingDiscrepancies: z.number().int().min(0),

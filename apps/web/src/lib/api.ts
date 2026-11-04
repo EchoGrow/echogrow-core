@@ -1,7 +1,4 @@
-
 const API_BASE_URL = (import.meta.env.VITE_API_URL ?? '/api').replace(/\/+$/, '')
-
-const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true'
 
 const REQUEST_TIMEOUT_MS = 30_000
 
@@ -49,6 +46,17 @@ export interface RejectedResponse {
   message: string
 }
 
+export interface ProcessingResponse {
+  status: 'processing'
+  interviewId: string
+  candidateName: string
+  progress: {
+    isScored: boolean
+    isVerified: boolean
+    isPlanned: boolean
+  }
+}
+
 export interface ScoredResponse {
   status: 'scored'
   interviewId: string
@@ -78,8 +86,7 @@ export interface DiscrepancyResponse {
   discrepancies: DiscrepancyRecord[]
 }
 
-// ScorecardResponse
-export type ScorecardResponse = NeedsReviewResponse | ScoredResponse | RejectedResponse
+export type ScorecardResponse = NeedsReviewResponse | ScoredResponse | RejectedResponse | ProcessingResponse
 
 export class ApiError extends Error {
   readonly status: number
@@ -133,89 +140,7 @@ async function readErrorMessage(response: Response): Promise<string> {
   return fallbackMessage(response.status)
 }
 
-const MOCK_META_PREFIX = 'echogrow:mock-interview:'
-
-interface MockInterviewMeta {
-  candidateName: string
-  createdAt: string
-}
-
-function readMockMeta(interviewId: string): MockInterviewMeta | null {
-  try {
-    const raw = sessionStorage.getItem(`${MOCK_META_PREFIX}${interviewId}`)
-    return raw ? (JSON.parse(raw) as MockInterviewMeta) : null
-  } catch {
-    return null
-  }
-}
-
-async function mockCreateInterview(input: CreateInterviewRequest): Promise<CreateInterviewResponse> {
-  await new Promise((resolve) => setTimeout(resolve, 900))
-
-  const interviewId = crypto.randomUUID()
-
-  const candidateName =
-    /^\s*name\s*:\s*(.+)$/im.exec(input.cv)?.[1]?.trim() || 'Sample candidate'
-
-  try {
-    sessionStorage.setItem(
-      `${MOCK_META_PREFIX}${interviewId}`,
-      JSON.stringify({ candidateName, createdAt: new Date().toISOString() }),
-    )
-  } catch {
-    /* ignore */
-  }
-
-  return { interviewId, status: 'queued' }
-}
-
-const MOCK_DIMENSIONS: ScorecardDimension[] = [
-  {
-    name: 'Technical Depth',
-    score: 2,
-    reason: 'Applied indexes correctly from EXPLAIN output, but could not explain how a B-tree works.',
-    evidenceQuote: "I know indexes speed up lookups, but I haven't gone deep into B-trees.",
-  },
-  {
-    name: 'Communication Clarity',
-    score: 4,
-    reason: 'Answers followed situation → action → measurable result.',
-    evidenceQuote: 'I profiled it with EXPLAIN ANALYZE and added a composite index.',
-  },
-  {
-    name: 'Domain Experience',
-    score: 3,
-    reason: 'Solid backend background, but payments exposure is limited.',
-    evidenceQuote: 'Limited. Most of my work was on internal tools.',
-  },
-  {
-    name: 'Problem Solving',
-    score: 4,
-    reason: 'Splits delivery into vertical slices and debugs methodically.',
-    evidenceQuote: 'I broke the work into vertical slices and reviewed every PR myself.',
-  },
-]
-
-async function mockGetScorecard(interviewId: string): Promise<ScorecardResponse> {
-  await new Promise((resolve) => setTimeout(resolve, 700))
-
-  const meta = readMockMeta(interviewId)
-
-  return {
-    status: 'scored',
-    interviewId,
-    candidateName: meta?.candidateName ?? 'Ahmed Al-Mansour',
-    interviewDate: meta?.createdAt ?? new Date().toISOString(),
-    dimensions: MOCK_DIMENSIONS,
-    overallConfidence: 0.82,
-    pendingDiscrepancies: 1,
-    skillGaps: 2,
-  }
-}
-
 export async function createInterview(input: CreateInterviewRequest): Promise<CreateInterviewResponse> {
-  if (USE_MOCK) return mockCreateInterview(input)
-
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
 
@@ -250,8 +175,6 @@ export async function createInterview(input: CreateInterviewRequest): Promise<Cr
 }
 
 export async function getScorecard(interviewId: string): Promise<ScorecardResponse> {
-  if (USE_MOCK) return mockGetScorecard(interviewId)
-
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
 
@@ -283,7 +206,6 @@ export async function getScorecard(interviewId: string): Promise<ScorecardRespon
   }
 }
 
-// Get all discrepancies for a specific interview
 export async function getDiscrepancies(interviewId: string): Promise<DiscrepancyResponse> {
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
@@ -313,7 +235,6 @@ export async function getDiscrepancies(interviewId: string): Promise<Discrepancy
   }
 }
 
-// Update a discrepancy status to confirmed or dismissed
 export async function updateDiscrepancyStatus(
   id: string,
   status: Exclude<DiscrepancyStatus, 'pending'>,

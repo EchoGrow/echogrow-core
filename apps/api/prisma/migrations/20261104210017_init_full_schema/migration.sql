@@ -34,6 +34,9 @@ CREATE TABLE "interview_sessions" (
     "resume_hash" VARCHAR(64) NOT NULL,
     "structured_transcript" JSONB,
     "status" "interview_status" NOT NULL DEFAULT 'QUEUED',
+    "is_scored" BOOLEAN NOT NULL DEFAULT false,
+    "is_verified" BOOLEAN NOT NULL DEFAULT false,
+    "is_planned" BOOLEAN NOT NULL DEFAULT false,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
 

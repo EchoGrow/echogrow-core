@@ -15,7 +15,7 @@ export class EvaluationService {
 
   async updateStatus(
     interviewId: string,
-    status: 'PROCESSING' | 'SCORED' | 'FAILED' | 'NEEDS_REVIEW' | 'REJECTED',
+    status: 'PROCESSING' | 'SCORED' | 'COMPLETED' | 'FAILED' | 'NEEDS_REVIEW' | 'REJECTED',
   ) {
     await this.prisma.interviewSession.update({
       where: { id: interviewId },
