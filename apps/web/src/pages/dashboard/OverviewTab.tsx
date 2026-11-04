@@ -1,5 +1,6 @@
+
 import { useEffect } from 'react'
-import type { ReactNode } from 'react'
+
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { SEO } from '../../components/SEO'
 import { Alert, Button, Card, Spinner, toast } from '../../components/ui'
@@ -97,7 +98,23 @@ function AverageScoreCard({ average, count }: { average: number; count: number }
   )
 }
 
-function StatCard({ label, value, hint, icon, tone, href, hrefLabel }: any) {
+function StatCard({
+  label,
+  value,
+  hint,
+  icon,
+  tone,
+  href,
+  hrefLabel,
+}: {
+  label: string
+  value: string | number
+  hint: string
+  icon: import('react').ReactNode
+  tone?: Tone
+  href?: string
+  hrefLabel?: string
+}) {
   const styles = tone ? TONES[tone] : null
   const card = (
     <Card className="group flex h-full flex-col p-5">

@@ -1,5 +1,8 @@
+
 const API_BASE_URL = (import.meta.env.VITE_API_URL ?? '/api').replace(/\/+$/, '')
+
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true'
+
 const REQUEST_TIMEOUT_MS = 30_000
 
 export interface CreateInterviewRequest {
@@ -64,11 +67,15 @@ export interface DiscrepancyRecord {
   field: string
   cvSays: string
   interviewSays: string
-  cvQuote?: string
-  interviewQuote?: string
+  cvQuote: string
+  interviewQuote: string
   confidence: number
   action: 'flag_for_human_review'
   status: DiscrepancyStatus
+}
+
+export interface DiscrepancyResponse {
+  discrepancies: DiscrepancyRecord[]
 }
 
 // ScorecardResponse
@@ -76,6 +83,7 @@ export type ScorecardResponse = NeedsReviewResponse | ScoredResponse | RejectedR
 
 export class ApiError extends Error {
   readonly status: number
+
   constructor(message: string, status = 0) {
     super(message)
     this.name = 'ApiError'
@@ -104,15 +112,24 @@ function fallbackMessage(status: number): string {
 async function readErrorMessage(response: Response): Promise<string> {
   try {
     const body: unknown = await response.json()
+
     if (body && typeof body === 'object') {
       const record = body as { message?: unknown; error?: unknown }
-      if (typeof record.message === 'string' && record.message.trim()) return record.message
+
+      if (typeof record.message === 'string' && record.message.trim()) {
+        return record.message
+      }
+
       if (record.error && typeof record.error === 'object') {
         const nested = (record.error as { message?: unknown }).message
+
         if (typeof nested === 'string' && nested.trim()) return nested
       }
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
+
   return fallbackMessage(response.status)
 }
 
@@ -134,10 +151,12 @@ function readMockMeta(interviewId: string): MockInterviewMeta | null {
 
 async function mockCreateInterview(input: CreateInterviewRequest): Promise<CreateInterviewResponse> {
   await new Promise((resolve) => setTimeout(resolve, 900))
+
   const interviewId = crypto.randomUUID()
 
   const candidateName =
     /^\s*name\s*:\s*(.+)$/im.exec(input.cv)?.[1]?.trim() || 'Sample candidate'
+
   try {
     sessionStorage.setItem(
       `${MOCK_META_PREFIX}${interviewId}`,
@@ -179,7 +198,9 @@ const MOCK_DIMENSIONS: ScorecardDimension[] = [
 
 async function mockGetScorecard(interviewId: string): Promise<ScorecardResponse> {
   await new Promise((resolve) => setTimeout(resolve, 700))
+
   const meta = readMockMeta(interviewId)
+
   return {
     status: 'scored',
     interviewId,
@@ -194,8 +215,10 @@ async function mockGetScorecard(interviewId: string): Promise<ScorecardResponse>
 
 export async function createInterview(input: CreateInterviewRequest): Promise<CreateInterviewResponse> {
   if (USE_MOCK) return mockCreateInterview(input)
+
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+
   try {
     const response = await fetch(`${API_BASE_URL}/interviews/upload`, {
       method: 'POST',
@@ -203,13 +226,23 @@ export async function createInterview(input: CreateInterviewRequest): Promise<Cr
       body: JSON.stringify(input),
       signal: controller.signal,
     })
+
     if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+
     const data = (await response.json()) as Partial<CreateInterviewResponse>
-    if (!data.interviewId) throw new ApiError('The server response did not include an interviewId.', response.status)
+
+    if (!data.interviewId) {
+      throw new ApiError('The server response did not include an interviewId.', response.status)
+    }
+
     return { interviewId: data.interviewId, status: data.status ?? 'queued' }
   } catch (cause) {
     if (cause instanceof ApiError) throw cause
-    if (cause instanceof DOMException && cause.name === 'AbortError') throw new ApiError('The request timed out. Check your connection and try again.')
+
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw new ApiError('The request timed out. Check your connection and try again.')
+    }
+
     throw new ApiError('Could not reach the server. Check your connection and try again.')
   } finally {
     window.clearTimeout(timeout)
@@ -218,18 +251,20 @@ export async function createInterview(input: CreateInterviewRequest): Promise<Cr
 
 export async function getScorecard(interviewId: string): Promise<ScorecardResponse> {
   if (USE_MOCK) return mockGetScorecard(interviewId)
+
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+
   try {
     const response = await fetch(
       `${API_BASE_URL}/interviews/${encodeURIComponent(interviewId)}/scorecard`,
       { headers: { Accept: 'application/json' }, signal: controller.signal },
     )
-    
+
     if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
 
     const data = (await response.json()) as ScorecardResponse
-    
+
     if (!data.status) {
       throw new ApiError('The server response did not include a status.', 502)
     }
@@ -237,7 +272,77 @@ export async function getScorecard(interviewId: string): Promise<ScorecardRespon
     return data
   } catch (cause) {
     if (cause instanceof ApiError) throw cause
-    if (cause instanceof DOMException && cause.name === 'AbortError') throw new ApiError('The request timed out. Check your connection and try again.')
+
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw new ApiError('The request timed out. Check your connection and try again.')
+    }
+
+    throw new ApiError('Could not reach the server. Check your connection and try again.')
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
+// Get all discrepancies for a specific interview
+export async function getDiscrepancies(interviewId: string): Promise<DiscrepancyResponse> {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/interviews/${encodeURIComponent(interviewId)}/discrepancies`,
+      {
+        headers: { Accept: 'application/json' },
+        signal: controller.signal,
+      },
+    )
+
+    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+
+    return (await response.json()) as DiscrepancyResponse
+  } catch (cause) {
+    if (cause instanceof ApiError) throw cause
+
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw new ApiError('The request timed out. Check your connection and try again.')
+    }
+
+    throw new ApiError('Could not reach the server. Check your connection and try again.')
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
+// Update a discrepancy status to confirmed or dismissed
+export async function updateDiscrepancyStatus(
+  id: string,
+  status: Exclude<DiscrepancyStatus, 'pending'>,
+): Promise<void> {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/discrepancies/${encodeURIComponent(id)}`,
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({ status }),
+        signal: controller.signal,
+      },
+    )
+
+    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+  } catch (cause) {
+    if (cause instanceof ApiError) throw cause
+
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw new ApiError('The request timed out. Check your connection and try again.')
+    }
+
     throw new ApiError('Could not reach the server. Check your connection and try again.')
   } finally {
     window.clearTimeout(timeout)
@@ -247,17 +352,24 @@ export async function getScorecard(interviewId: string): Promise<ScorecardRespon
 export async function forceEvaluation(interviewId: string): Promise<{ interviewId: string; status: string }> {
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+
   try {
     const response = await fetch(`${API_BASE_URL}/interviews/${encodeURIComponent(interviewId)}/force-evaluate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal: controller.signal,
     })
+
     if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+
     return (await response.json()) as { interviewId: string; status: string }
   } catch (cause) {
     if (cause instanceof ApiError) throw cause
-    if (cause instanceof DOMException && cause.name === 'AbortError') throw new ApiError('The request timed out. Check your connection and try again.')
+
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw new ApiError('The request timed out. Check your connection and try again.')
+    }
+
     throw new ApiError('Could not reach the server. Check your connection and try again.')
   } finally {
     window.clearTimeout(timeout)
@@ -267,17 +379,24 @@ export async function forceEvaluation(interviewId: string): Promise<{ interviewI
 export async function rejectInterview(interviewId: string): Promise<{ interviewId: string; status: string }> {
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+
   try {
     const response = await fetch(`${API_BASE_URL}/interviews/${encodeURIComponent(interviewId)}/reject`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal: controller.signal,
     })
+
     if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+
     return (await response.json()) as { interviewId: string; status: string }
   } catch (cause) {
     if (cause instanceof ApiError) throw cause
-    if (cause instanceof DOMException && cause.name === 'AbortError') throw new ApiError('The request timed out. Check your connection and try again.')
+
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw new ApiError('The request timed out. Check your connection and try again.')
+    }
+
     throw new ApiError('Could not reach the server. Check your connection and try again.')
   } finally {
     window.clearTimeout(timeout)
