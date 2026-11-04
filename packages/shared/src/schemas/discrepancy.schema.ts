@@ -22,6 +22,13 @@ export const DiscrepancyStatusUpdateSchema = z.object({
   status: z.enum(['confirmed', 'dismissed']),
 });
 
+export const DiscrepancyStatusResponseSchema = z.object({
+  id: z.string(),
+  status: z.enum(['CONFIRMED', 'DISMISSED']),
+  reviewedAt: z.date(),
+});
+
 export type DiscrepancyItem = z.infer<typeof DiscrepancyItemSchema>;
 export type DiscrepancyResponse = z.infer<typeof DiscrepancyResponseSchema>;
 export type DiscrepancyStatusUpdate = z.infer<typeof DiscrepancyStatusUpdateSchema>;
+export type DiscrepancyStatusResponse = z.infer<typeof DiscrepancyStatusResponseSchema>;
