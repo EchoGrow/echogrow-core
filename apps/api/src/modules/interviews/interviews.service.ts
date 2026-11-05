@@ -70,7 +70,7 @@ export class InterviewsService {
       'evaluate',
       { interviewId: session.id },
       { 
-        attempts: 1,
+        attempts: 1, // <--- محاولة واحدة فقط (الـ LLM يتولى إعادة المحاولة الداخلية)
         backoff: { type: 'exponential', delay: 2000 }, 
         removeOnComplete: true 
       },
@@ -124,7 +124,17 @@ export class InterviewsService {
       };
     }
 
-    // إذا لم تكتمل الحالة بعد، نرسل حالة التتبع (Progress)
+    // حالة الفشل
+    if (session.status === 'FAILED') {
+      return {
+        status: 'failed',
+        interviewId: session.id,
+        candidateName: session.candidate.name,
+        message: 'The analysis failed. You can retry or start a new analysis.',
+      };
+    }
+
+    // حالة المعالجة
     if (session.status !== 'COMPLETED' || !session.scorecard) {
       return {
         status: 'processing',
@@ -138,6 +148,7 @@ export class InterviewsService {
       };
     }
 
+    // حالة النجاح
     const pendingDiscrepancies = await this.prisma.discrepancy.count({
       where: {
         scorecardId: session.scorecard.id,
@@ -186,8 +197,8 @@ export class InterviewsService {
       throw new NotFoundException('Interview session not found.');
     }
 
-    if (session.status !== 'NEEDS_REVIEW') {
-      throw new BadRequestException('This interview is not in needs_review state.');
+    if (session.status !== 'NEEDS_REVIEW' && session.status !== 'FAILED') {
+      throw new BadRequestException('This interview cannot be re-evaluated.');
     }
 
     await this.prisma.interviewSession.update({

@@ -74,7 +74,6 @@ export class PipelineProcessor extends WorkerHost {
         evaluation,
       );
       
-      // تحديث حالة التقييم
       await this.prisma.interviewSession.update({
         where: { id: interviewId },
         data: { isScored: true },
@@ -91,7 +90,6 @@ export class PipelineProcessor extends WorkerHost {
         discrepancies,
       );
       
-      // تحديث حالة التحقق
       await this.prisma.interviewSession.update({
         where: { id: interviewId },
         data: { isVerified: true },
@@ -99,12 +97,10 @@ export class PipelineProcessor extends WorkerHost {
       this.logger.log(`[Pipeline] Verification done for ${interviewId}`);
 
       // 3. (Sprint 03) توليد خطة النمو
-      // await this.roadmapService.generate(scorecardId);
+      // TODO: In Sprint 3, replace this with the actual RoadmapService.generate() call.
+      // For now, we simulate the planning step with a short delay.
+      await new Promise(resolve => setTimeout(resolve, 2000)); 
       
-      // محاكاة خطة النمو (Dummy) - في Sprint 3 سنستبدلها بالكود الحقيقي
-      await new Promise(resolve => setTimeout(resolve, 15000)); // وقت وهمي
-      
-      // تحديث حالة الخطة
       await this.prisma.interviewSession.update({
         where: { id: interviewId },
         data: { isPlanned: true },
@@ -122,11 +118,10 @@ export class PipelineProcessor extends WorkerHost {
         discrepanciesCount: discrepancies.length,
       };
     } catch (error: any) {
-      this.logger.error(`[Pipeline] Failed: ${error.message}`);
+      this.logger.error(`[Pipeline] Failed for session ${interviewId}: ${error.message}`, error.stack);
 
-      if (job.attemptsMade >= (job.opts.attempts || 3) - 1) {
-        await this.evaluationService.updateStatus(interviewId, 'FAILED');
-      }
+      await this.evaluationService.updateStatus(interviewId, 'FAILED');
+      
       throw error;
     }
   }

@@ -31,7 +31,6 @@ export function ScorecardProvider({
               scorecard: response, 
               error: null 
             })
-            // استمر في الـ Polling طالما أن الحالة processing
             timer = setTimeout(() => setAttempt((v) => v + 1), 2000)
           } else if (response.status === 'needs_review') {
             setState({
@@ -41,6 +40,8 @@ export function ScorecardProvider({
             })
           } else if (response.status === 'rejected') {
             setState({ status: 'rejected', scorecard: response, error: response.message })
+          } else if (response.status === 'failed') {
+            setState({ status: 'failed', scorecard: response, error: response.message })
           } else {
             setState({ status: 'ready', scorecard: response, error: null })
           }
