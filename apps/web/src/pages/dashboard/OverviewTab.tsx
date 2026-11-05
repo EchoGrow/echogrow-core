@@ -1,12 +1,13 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Target, Flag, TrendingUp, ShieldCheck } from 'lucide-react'
+import { Target, Flag, TrendingUp, ShieldCheck, AlertCircle, RotateCcw, Trash2 } from 'lucide-react'
 import { SEO } from '../../components/SEO'
 import { Alert, Button, Card, Spinner, toast } from '../../components/ui'
 import { ReviewBanner } from '../../components/ui/ReviewBanner'
-import { ProcessingState } from '../../components/dashboard/ProcessingState' // <--- استيراد المكون الجديد
+import { ProcessingState } from '../../components/dashboard/ProcessingState'
 import { useScorecard } from '../../lib/scorecard/useScorecard'
+import { forceEvaluation } from '../../lib/api'
 import type { ScorecardDimension } from '../../lib/api'
 import { cn } from '../../lib/cn'
 import { fadeUp, scaleIn, staggerContainer } from '../../lib/animations'
@@ -208,8 +209,6 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
   )
 }
 
-// تم حذف ProcessingState القديم واستبداله بالمكون الجديد
-
 function NotFoundState() {
   return (
     <div className="mx-auto max-w-xl py-8">
@@ -229,6 +228,48 @@ function EmptyState({ base }: { base: string }) {
         <Link to="/upload" className="text-sm font-semibold text-accent-700 hover:underline dark:text-accent-300"><span aria-hidden="true">←</span> Start a new analysis</Link>
         <Link to={`${base}/evaluation`} className="text-sm font-semibold text-accent-700 hover:underline dark:text-accent-300">Open evaluation <span aria-hidden="true">→</span></Link>
       </div>
+    </div>
+  )
+}
+
+function FailedState({ interviewId, onRetry }: { interviewId: string; onRetry: () => void }) {
+  const navigate = useNavigate()
+  const [isRetrying, setIsRetrying] = useState(false)
+
+  const handleRetry = async () => {
+    setIsRetrying(true)
+    try {
+      await forceEvaluation(interviewId)
+      toast.success('Retrying analysis', { description: 'The pipeline will restart shortly.' })
+      onRetry()
+    } catch (cause) {
+      toast.error('Could not retry', { description: cause instanceof Error ? cause.message : 'Unknown error' })
+      setIsRetrying(false)
+    }
+  }
+
+  return (
+    <div className="mx-auto max-w-xl py-8 animate-fade-up">
+      <Card className="p-8 text-center border-danger-500/30 bg-danger-50 dark:bg-danger-500/10">
+        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-danger-500/15 text-danger-600">
+          <AlertCircle className="h-6 w-6" />
+        </span>
+        <h2 className="mt-5 text-lg font-semibold text-danger-700 dark:text-danger-500">Analysis Failed</h2>
+        <p className="mt-2 text-sm text-danger-700/80 dark:text-danger-500/80">
+          The AI pipeline encountered an error and could not complete the analysis. You can try again or start a new one.
+        </p>
+        
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+          <Button variant="primary" onClick={handleRetry} disabled={isRetrying}>
+            {isRetrying ? <Spinner className="mr-2 h-4 w-4" /> : <RotateCcw className="mr-2 h-4 w-4" />}
+            Retry Analysis
+          </Button>
+          <Button variant="secondary" onClick={() => navigate('/upload')}>
+            <Trash2 className="mr-2 h-4 w-4" />
+            Start New
+          </Button>
+        </div>
+      </Card>
     </div>
   )
 }
@@ -268,7 +309,16 @@ export function OverviewTab() {
     return (
       <>
         <SEO title="Interview overview" description="Candidate scorecard overview." noIndex />
-        <ProcessingState /> {/* <--- استخدام المكون الجديد */}
+        <ProcessingState />
+      </>
+    )
+  }
+
+  if (status === 'failed') {
+    return (
+      <>
+        <SEO title="Analysis failed" description="The analysis failed." noIndex />
+        <FailedState interviewId={interviewId} onRetry={refresh} />
       </>
     )
   }

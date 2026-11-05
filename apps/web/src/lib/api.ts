@@ -68,6 +68,13 @@ export interface ScoredResponse {
   skillGaps: number
 }
 
+export interface FailedResponse {
+  status: 'failed'
+  interviewId: string
+  candidateName: string
+  message: string
+}
+
 export type DiscrepancyStatus = 'pending' | 'confirmed' | 'dismissed'
 
 export interface DiscrepancyRecord {
@@ -86,7 +93,12 @@ export interface DiscrepancyResponse {
   discrepancies: DiscrepancyRecord[]
 }
 
-export type ScorecardResponse = NeedsReviewResponse | ScoredResponse | RejectedResponse | ProcessingResponse
+export type ScorecardResponse = 
+  | NeedsReviewResponse 
+  | ScoredResponse 
+  | RejectedResponse 
+  | ProcessingResponse
+  | FailedResponse
 
 export class ApiError extends Error {
   readonly status: number

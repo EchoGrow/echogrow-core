@@ -7,6 +7,7 @@ export type ScorecardStatus =
   | 'processing' 
   | 'needs-review' 
   | 'rejected'
+  | 'failed'
   | 'not-found' 
   | 'error';
 
