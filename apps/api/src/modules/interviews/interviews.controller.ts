@@ -29,4 +29,9 @@ export class InterviewsController {
   async getDiscrepancies(@Param('id') id: string) {
     return this.interviewsService.getDiscrepancies(id);
   }
+
+  @Get(':id/roadmap')
+  async getRoadmap(@Param('id') id: string) {
+    return this.interviewsService.getRoadmap(id);
+  }
 }
