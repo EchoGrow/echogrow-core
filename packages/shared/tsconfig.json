@@ -7,7 +7,9 @@
     "skipLibCheck": true,
     "declaration": true,
     "rootDir": "./src",
-    "types": []
+    "types": [],
+    "resolveJsonModule": true,
+    "esModuleInterop": true
   },
   "include": ["src"]
 }
