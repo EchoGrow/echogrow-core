@@ -5,47 +5,61 @@ import { SpeakerTurn } from '@echogrow/shared';
 export class TranscriptParserService {
   private readonly logger = new Logger(TranscriptParserService.name);
 
-  private readonly turnHeaderRegex =
-    /^(?:\[(?<ts1>\d{1,2}:\d{2}(?::\d{2})?)\]\s*)?(?<speaker>[A-Za-z0-9 _-]+?)(?:\s*[[/(](?<ts2>\d{1,2}:\d{2}(?::\d{2})?)[\])])?\s*:\s*(?<text>.*)$/;
-
   parse(rawTranscript: string): SpeakerTurn[] {
     if (!rawTranscript || !rawTranscript.trim()) {
       return [];
     }
 
-    const lines = rawTranscript.split(/\r?\n/);
-    const turns: SpeakerTurn[] = [];
+    // إذا كان النص كله سطراً واحداً (بدون \n) ويحتوي على "Interviewer:"،
+    // نقسمه يدوياً بناءً على "Interviewer:" و "Candidate:"
+    let lines: string[];
 
+    if (!rawTranscript.includes('\n') && rawTranscript.includes('Interviewer:')) {
+      // النص كله في سطر واحد: نقسمه بناءً على "Interviewer:" و "Candidate:"
+      lines = rawTranscript
+        .split(/(?=Interviewer:|Candidate:|Host:|Applicant:)/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+    } else {
+      // النص يحتوي على أسطر: نقسمه عادياً
+      lines = rawTranscript.split(/\r?\n/);
+    }
+
+    const turns: SpeakerTurn[] = [];
     let currentTurn: SpeakerTurn | null = null;
     let turnIndex = 0;
 
     for (const rawLine of lines) {
       const line = rawLine.trim();
-
       if (!line) continue;
 
-      const match = line.match(this.turnHeaderRegex);
+      // Regex: يلتقط "Interviewer:" أو "Candidate:" أو "Host:" أو "Applicant:"
+      const match = line.match(
+        /^(?<speaker>Interviewer|Candidate|Host|Applicant)\s*:\s*(?<text>.*)$/i,
+      );
 
-      if (match && match.groups?.speaker) {
+      if (match && match.groups?.speaker && match.groups?.text) {
         if (currentTurn) {
           turns.push(currentTurn);
         }
 
         const rawSpeaker = match.groups.speaker.trim();
         const normalizedSpeaker = this.normalizeSpeaker(rawSpeaker);
-        const timestamp =
-          match.groups.ts1 || match.groups.ts2 || this.generateEstimatedTimestamp(turnIndex);
-        const text = (match.groups.text || '').trim();
+        const text = match.groups.text.trim();
 
         currentTurn = {
           speaker: normalizedSpeaker,
           text,
-          timestamp,
+          timestamp: this.generateEstimatedTimestamp(turnIndex),
         };
         turnIndex++;
       } else if (currentTurn) {
-        currentTurn.text = currentTurn.text ? `${currentTurn.text} ${line}` : line;
+        // إذا لم يكن سطراً جديداً، أضفه إلى الدور الحالي
+        currentTurn.text = currentTurn.text
+          ? `${currentTurn.text} ${line}`
+          : line;
       } else {
+        // نص بدون متحدث (نادر)
         currentTurn = {
           speaker: 'Candidate',
           text: line,
@@ -65,10 +79,18 @@ export class TranscriptParserService {
 
   normalizeSpeaker(speaker: string): 'Interviewer' | 'Candidate' | string {
     const lower = speaker.toLowerCase();
-    if (lower.includes('interviewer') || lower.includes('host') || lower.includes('recruiter')) {
+    if (
+      lower.includes('interviewer') ||
+      lower.includes('host') ||
+      lower.includes('recruiter')
+    ) {
       return 'Interviewer';
     }
-    if (lower.includes('candidate') || lower.includes('interviewee') || lower.includes('applicant')) {
+    if (
+      lower.includes('candidate') ||
+      lower.includes('interviewee') ||
+      lower.includes('applicant')
+    ) {
       return 'Candidate';
     }
     return speaker;
