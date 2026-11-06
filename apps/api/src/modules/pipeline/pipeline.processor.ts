@@ -4,6 +4,7 @@ import { Logger } from '@nestjs/common';
 import { EVALUATION_QUEUE_NAME } from '../evaluation/evaluation.constants';
 import { EvaluationService } from '../evaluation/evaluation.service';
 import { DiscrepancyService } from '../discrepancy/discrepancy.service';
+import { RoadmapService } from '../roadmap/roadmap.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { TranscriptParserService } from '../evaluation/transcript-parser.service';
 
@@ -19,6 +20,7 @@ export class PipelineProcessor extends WorkerHost {
   constructor(
     private readonly evaluationService: EvaluationService,
     private readonly discrepancyService: DiscrepancyService,
+    private readonly roadmapService: RoadmapService,
     private readonly prisma: PrismaService,
     private readonly parser: TranscriptParserService,
   ) {
@@ -29,7 +31,9 @@ export class PipelineProcessor extends WorkerHost {
     const { interviewId, force = false } = job.data;
     if (!interviewId) throw new Error('Missing interviewId in job data');
 
-    this.logger.log(`[Pipeline] Started for session ${interviewId} (force: ${force})`);
+    this.logger.log(
+      `[Pipeline] Started for session ${interviewId} (force: ${force})`,
+    );
 
     try {
       await this.evaluationService.updateStatus(interviewId, 'PROCESSING');
@@ -51,7 +55,9 @@ export class PipelineProcessor extends WorkerHost {
         this.logger.log(`[Pipeline] Transcript confidence: ${confidence}`);
 
         if (confidence < 0.6) {
-          this.logger.warn(`[Pipeline] Low confidence (${confidence}). Routing to NEEDS_REVIEW.`);
+          this.logger.warn(
+            `[Pipeline] Low confidence (${confidence}). Routing to NEEDS_REVIEW.`,
+          );
           await this.evaluationService.updateStatus(interviewId, 'NEEDS_REVIEW');
           return {
             success: true,
@@ -73,7 +79,7 @@ export class PipelineProcessor extends WorkerHost {
         interviewId,
         evaluation,
       );
-      
+
       await this.prisma.interviewSession.update({
         where: { id: interviewId },
         data: { isScored: true },
@@ -89,18 +95,26 @@ export class PipelineProcessor extends WorkerHost {
         scorecardId,
         discrepancies,
       );
-      
+
       await this.prisma.interviewSession.update({
         where: { id: interviewId },
         data: { isVerified: true },
       });
       this.logger.log(`[Pipeline] Verification done for ${interviewId}`);
 
-      // 3. (Sprint 03) توليد خطة النمو
-      // TODO: In Sprint 3, replace this with the actual RoadmapService.generate() call.
-      // For now, we simulate the planning step with a short delay.
-      await new Promise(resolve => setTimeout(resolve, 2000)); 
-      
+      // 3. توليد خطة النمو (Roadmap)
+      const roadmapResult = await this.roadmapService.generateAndSave(scorecardId);
+
+      if (roadmapResult) {
+        this.logger.log(
+          `[Pipeline] Roadmap generated with ${roadmapResult.gaps.length} gaps and ${roadmapResult.roadmap.length} weeks.`,
+        );
+      } else {
+        this.logger.log(
+          `[Pipeline] No weak dimensions found. Skipping roadmap generation.`,
+        );
+      }
+
       await this.prisma.interviewSession.update({
         where: { id: interviewId },
         data: { isPlanned: true },
@@ -116,12 +130,16 @@ export class PipelineProcessor extends WorkerHost {
         status: 'completed',
         scorecardId,
         discrepanciesCount: discrepancies.length,
+        roadmapWeeks: roadmapResult?.roadmap.length ?? 0,
       };
     } catch (error: any) {
-      this.logger.error(`[Pipeline] Failed for session ${interviewId}: ${error.message}`, error.stack);
+      this.logger.error(
+        `[Pipeline] Failed for session ${interviewId}: ${error.message}`,
+        error.stack,
+      );
 
       await this.evaluationService.updateStatus(interviewId, 'FAILED');
-      
+
       throw error;
     }
   }
