@@ -6,7 +6,7 @@ import {
   buildRoadmapFromGapsPrompt,
   SkillExtractionSchema,
 } from './roadmap.prompts';
-import { RoadmapSchema, Roadmap, whitelist } from '@echogrow/shared';
+import { RoadmapGenerationSchema, RoadmapGeneration, whitelist } from '@echogrow/shared';
 
 @Injectable()
 export class RoadmapService {
@@ -20,7 +20,7 @@ export class RoadmapService {
     private readonly prisma: PrismaService,
   ) {}
 
-  async generateAndSave(scorecardId: string): Promise<Roadmap | null> {
+  async generateAndSave(scorecardId: string): Promise<RoadmapGeneration | null> {
     // 1. جلب جميع الأبعاد
     const dimensions = await this.prisma.dimension.findMany({
       where: { scorecardId },
@@ -97,7 +97,7 @@ export class RoadmapService {
       .join('\n');
 
     const roadmapPrompt = buildRoadmapFromGapsPrompt(uniqueSkills, evidenceContext);
-    const roadmapResult = await this.llm.generate(roadmapPrompt, RoadmapSchema);
+    const roadmapResult = await this.llm.generate(roadmapPrompt, RoadmapGenerationSchema);
 
     this.logger.log(
       `Roadmap generated with ${roadmapResult.gaps.length} gaps and ${roadmapResult.roadmap.length} weeks.`,

@@ -9,6 +9,7 @@ import { Queue } from 'bullmq';
 import {
   CreateInterviewSchema,
   DiscrepancySchema,
+  RoadmapResponseSchema,
   ScorecardSchema,
 } from '@echogrow/shared';
 import { createHash } from 'crypto';
@@ -278,5 +279,75 @@ export class InterviewsService {
     };
 
     return DiscrepancySchema.parse(response);
+  }
+
+  async getRoadmap(interviewId: string) {
+    const session = await this.prisma.interviewSession.findUnique({
+      where: { id: interviewId },
+      include: {
+        scorecard: {
+          include: {
+            dimensions: {
+              include: {
+                skillGaps: true,
+              },
+            },
+            roadmap: {
+              include: {
+                items: {
+                  include: {
+                    skillGap: true,
+                  },
+                  orderBy: {
+                    week: 'asc',
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!session) {
+      throw new NotFoundException('Interview session not found.');
+    }
+
+    if (!session.scorecard) {
+      throw new NotFoundException('Roadmap not found.');
+    }
+
+    const gaps = session.scorecard.dimensions.flatMap((dimension) =>
+        dimension.skillGaps.map((gap) => ({
+          skillName: gap.skillName,
+          priority: gap.priority,
+        })),
+    );
+
+    // No skill gaps were identified.
+    if (gaps.length === 0) {
+      return RoadmapResponseSchema.parse({
+        gaps: [],
+        roadmap: [],
+      });
+    }
+
+    const savedRoadmap = session.scorecard.roadmap;
+
+    if (!savedRoadmap) {
+      throw new NotFoundException('Roadmap not found.');
+    }
+
+    const response = {
+      gaps,
+      roadmap: savedRoadmap.items.map((item) => ({
+        week: item.week,
+        task: item.description,
+        resourceUrl: item.resourceUrl,
+        skillName: item.skillGap.skillName,
+      })),
+    };
+
+    return RoadmapResponseSchema.parse(response);
   }
 }
