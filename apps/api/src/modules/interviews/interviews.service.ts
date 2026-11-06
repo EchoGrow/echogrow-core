@@ -9,7 +9,7 @@ import { Queue } from 'bullmq';
 import {
   CreateInterviewSchema,
   DiscrepancySchema,
-  RoadmapSchema,
+  RoadmapResponseSchema,
   ScorecardSchema,
 } from '@echogrow/shared';
 import { createHash } from 'crypto';
@@ -326,7 +326,7 @@ export class InterviewsService {
 
     // No skill gaps were identified.
     if (gaps.length === 0) {
-      return RoadmapSchema.parse({
+      return RoadmapResponseSchema.parse({
         gaps: [],
         roadmap: [],
       });
@@ -348,6 +348,6 @@ export class InterviewsService {
       })),
     };
 
-    return RoadmapSchema.parse(response);
+    return RoadmapResponseSchema.parse(response);
   }
 }
