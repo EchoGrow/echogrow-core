@@ -100,6 +100,28 @@ export type ScorecardResponse =
   | ProcessingResponse
   | FailedResponse
 
+// ============================================================
+// Roadmap Types
+// ============================================================
+export type SkillGapPriority = 'LOW' | 'MEDIUM' | 'HIGH';
+
+export interface SkillGapRecord {
+  skillName: string;
+  priority: SkillGapPriority;
+}
+
+export interface RoadmapItemRecord {
+  week: number;
+  task: string;
+  resourceUrl: string | null;
+  skillName: string;
+}
+
+export interface RoadmapResponse {
+  gaps: SkillGapRecord[];
+  roadmap: RoadmapItemRecord[];
+}
+
 export class ApiError extends Error {
   readonly status: number
 
@@ -333,5 +355,34 @@ export async function rejectInterview(interviewId: string): Promise<{ interviewI
     throw new ApiError('Could not reach the server. Check your connection and try again.')
   } finally {
     window.clearTimeout(timeout)
+  }
+}
+
+// ============================================================
+// Roadmap API
+// ============================================================
+export async function getRoadmap(interviewId: string): Promise<RoadmapResponse> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/interviews/${encodeURIComponent(interviewId)}/roadmap`,
+      { headers: { Accept: 'application/json' }, signal: controller.signal },
+    );
+
+    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status);
+
+    return (await response.json()) as RoadmapResponse;
+  } catch (cause) {
+    if (cause instanceof ApiError) throw cause;
+
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw new ApiError('The request timed out. Check your connection and try again.');
+    }
+
+    throw new ApiError('Could not reach the server. Check your connection and try again.');
+  } finally {
+    window.clearTimeout(timeout);
   }
 }
