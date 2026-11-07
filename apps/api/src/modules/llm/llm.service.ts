@@ -24,7 +24,7 @@ export class LlmService {
         this.logger.log(`LLM call attempt ${attempt + 1}/${maxRetries + 1}`);
 
         const response = await this.ai.models.generateContent({
-          model: 'gemini-3.5-flash-lite', // نموذج أخف لتجنب الضغط
+          model: 'gemini-3.5-flash-lite',
           contents: prompt,
           config: {
             responseMimeType: 'application/json',
@@ -45,15 +45,17 @@ export class LlmService {
 
         this.logger.log(`LLM call succeeded on attempt ${attempt + 1}`);
         return validated;
-      } catch (error: unknown) {
+      } catch (error: any) {
         lastError = error;
         const message = error instanceof Error ? error.message : String(error);
-        this.logger.warn(`LLM call failed on attempt ${attempt + 1}: ${message}`);
+        const causeCode = error?.cause?.code ?? error?.cause?.message ?? 'n/a';
+        this.logger.warn(
+          `LLM call failed on attempt ${attempt + 1}: ${message} | cause: ${causeCode}`,
+        );
 
         if (attempt < maxRetries) {
-          // Exponential backoff with jitter
-          const baseDelay = 1000 * Math.pow(2, attempt); // 1s, 2s, 4s...
-          const jitter = Math.random() * 500; // 0-500ms عشوائي
+          const baseDelay = 1000 * Math.pow(2, attempt);
+          const jitter = Math.random() * 500;
           const delay = baseDelay + jitter;
           this.logger.log(`Waiting ${Math.round(delay)}ms before retry...`);
           await new Promise((resolve) => setTimeout(resolve, delay));

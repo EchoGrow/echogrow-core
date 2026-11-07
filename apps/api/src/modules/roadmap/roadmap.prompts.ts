@@ -18,57 +18,63 @@ export const SkillExtractionSchema = z.object({
 export type SkillExtraction = z.infer<typeof SkillExtractionSchema>;
 
 /**
- * Prompt 1: استخراج الفجوات المهارية من مجموعة صغيرة من الأدلة.
+ * Prompt 1: استخراج الفجوات المهارية من دفعة أدلة + النص الكامل للمقابلة.
  * يُستخدم في Multi-Pass Extraction.
  */
 export function buildSkillExtractionPrompt(
-  evidenceBatch: { dimension: string; quote: string }[],
+  evidenceBatch: { dimension: string; quote: string; score?: number; reason?: string }[],
+  transcript?: string,
 ): string {
   const evidenceText = evidenceBatch
     .map(
       (e, i) =>
-        `Evidence ${i + 1} (Dimension: ${e.dimension}):\n"${e.quote}"`,
+        `Evidence ${i + 1} (Dimension: ${e.dimension}, Score: ${e.score ?? 'n/a'}/5):\n` +
+        `Quote: "${e.quote}"` +
+        (e.reason ? `\nAssessor reasoning: ${e.reason}` : ''),
     )
     .join('\n\n');
 
-  return `You are a Senior Technical Interviewer. Your task is to extract EVERY specific technical skill that the candidate explicitly admitted they lack or are weak in, based on the evidence below.
+  const transcriptSection = transcript
+    ? `\n### FULL INTERVIEW TRANSCRIPT (primary source for finding admitted weaknesses):\n${transcript}\n`
+    : '';
 
-### EVIDENCE BATCH:
+  return `You are a Senior Technical Interviewer. Your task is to extract EVERY specific technical skill that the candidate admitted they lack, are weak in, or showed clear gaps in.
+
+### EVIDENCE BATCH (low scores indicate weaknesses):
 ${evidenceText}
-
+${transcriptSection}
 ### INSTRUCTIONS:
-1. Read each evidence quote carefully.
-2. Extract EVERY specific technical skill that the candidate admitted they lack, are weak in, or have never used.
-   - Look for phrases like: "I don't know", "I have never used", "I am not familiar with", "I only know the basics", "I didn't dig deep into", "I haven't worked with".
-   - Each skill must be a **concrete, learnable skill** (e.g., "Kubernetes", "Terraform", "GraphQL", "SQL Indexing", "OAuth 2.0", "TLS", "DNS", "Apache Kafka", "Redis", "Observability", "CI/CD", "MongoDB Aggregation").
-   - **DO NOT use dimension names** (Technical Depth, Communication Clarity, Domain Experience, Problem Solving) as skills.
-   - **Extract as many skills as the evidence supports.** If the evidence mentions 5 weaknesses, extract 5 skills.
-3. Return a JSON object with a single key "skills" containing an array of strings (the specific skill names).
+1. Focus on the dimensions in the evidence batch, especially those with a score of 2 or lower.
+2. Search the evidence, the assessor reasoning${transcript ? ' AND the full transcript' : ''} for specific technical skills the candidate:
+   - explicitly admitted they lack ("I don't know", "I have never used", "I am not familiar with", "I only know the basics", "I haven't worked with"), OR
+   - could not explain or answered incorrectly or vaguely about.
+3. Each skill must be a **concrete, learnable skill** (e.g., "Kubernetes", "Terraform", "GraphQL", "SQL Indexing", "OAuth 2.0", "Apache Kafka", "Observability", "CI/CD").
+4. Prefer the standard names used in industry. Do NOT use dimension names as skills.
+5. If every dimension in the batch scores 4 or higher and nothing is admitted, return an empty list.
+6. Return a JSON object with a single key "skills" (array of strings).
 
 ### EXAMPLE:
 Evidence: "I don't know Kubernetes or Terraform. I have never used GraphQL."
 Output: { "skills": ["Kubernetes", "Terraform", "GraphQL"] }
 
 ### EXAMPLE (empty):
-Evidence: "I have strong experience with React and TypeScript."
+Evidence: Score 5/5, "I have strong experience with React and TypeScript."
 Output: { "skills": [] }
 
 ### CRITICAL RULES:
-- **NEVER use dimension names as skills.**
-- **Extract EVERY skill mentioned.** Do not skip any.
+- NEVER use dimension names as skills.
+- Extract EVERY supported skill. Do not skip any.
 - Return ONLY valid JSON.
 `;
 }
 
 /**
  * Prompt 2: توليد Roadmap من قائمة الفجوات المدمجة.
- * يُستخدم بعد جمع كل الفجوات من كل المجموعات.
  */
 export function buildRoadmapFromGapsPrompt(
   uniqueSkills: string[],
   evidenceContext: string,
 ): string {
-  // تجهيز قائمة الموارد المعتمدة
   const resourcesText = whitelist
     .map(
       (skill) =>
@@ -104,6 +110,7 @@ ${resourcesText}
 
 ### CRITICAL RULES:
 - **DO NOT invent URLs.** You MUST use only the URLs from the approved list.
+- **Match each skill to the closest skill name in the approved list** (e.g. "K8s" → "Kubernetes", "Postgres" → "PostgreSQL") and use that skill's URL.
 - **FALLBACK RULE:** If a skill is NOT in the approved list, set "resourceUrl" to:
   "https://www.google.com/search?q=<skill_name>+tutorial"
   and add "(Search for a vetted resource)" to the task description.
