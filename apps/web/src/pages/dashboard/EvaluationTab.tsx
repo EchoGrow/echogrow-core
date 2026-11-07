@@ -1,40 +1,77 @@
-import { useState } from 'react'
-import { useScorecard } from '../../lib/scorecard/useScorecard'
-import { Alert, Button, Card, Spinner } from '../../components/ui'
-import { Link, useParams } from 'react-router-dom'
-import { ReviewBanner } from '../../components/ui/ReviewBanner'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Quote, ChevronDown } from 'lucide-react'
-import { fadeUp, staggerContainer } from '../../lib/animations'
-import { cn } from '../../lib/cn'
+import { useState } from 'react';
+import { useScorecard } from '../../lib/scorecard/useScorecard';
+import { Alert, Button, Card } from '../../components/ui';
+import { Link, useParams } from 'react-router-dom';
+import { ReviewBanner } from '../../components/ui/ReviewBanner';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Quote, ChevronDown } from 'lucide-react';
+import { fadeUp, staggerContainer } from '../../lib/animations';
+import { cn } from '../../lib/cn';
+
+// ============================================================
+// Loading skeleton — matches the 4-card grid
+// ============================================================
+function EvaluationSkeleton() {
+  return (
+    <div className="space-y-6" aria-busy="true" aria-live="polite">
+      <span className="sr-only">Loading evaluation…</span>
+
+      {/* Header */}
+      <div>
+        <div className="h-3 w-24 rounded skeleton" />
+        <div className="mt-2 h-8 w-56 rounded-lg skeleton" />
+        <div className="mt-3 h-4 w-full max-w-2xl rounded skeleton" />
+      </div>
+
+      {/* 4 dimension cards */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 items-start">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="rounded-card border border-line bg-surface-card p-6 min-h-[220px]">
+            {/* Header: name + score badge */}
+            <div className="flex items-center justify-between gap-3">
+              <div className="h-5 w-36 rounded skeleton" />
+              <div className="h-8 w-16 rounded-lg skeleton" />
+            </div>
+
+            {/* Reason text */}
+            <div className="mt-3 space-y-2">
+              <div className="h-4 w-full rounded skeleton" />
+              <div className="h-4 w-5/6 rounded skeleton" />
+              <div className="h-4 w-2/3 rounded skeleton" />
+            </div>
+
+            {/* Footer: toggle */}
+            <div className="mt-4 border-t border-line pt-4">
+              <div className="flex items-center justify-between">
+                <div className="h-4 w-28 rounded skeleton" />
+                <div className="h-4 w-4 rounded skeleton" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export function EvaluationTab() {
-  const { interviewId = '' } = useParams<{ interviewId: string }>()
-  const { status, scorecard, error, refresh } = useScorecard()
+  const { interviewId = '' } = useParams<{ interviewId: string }>();
+  const { status, scorecard, error, refresh } = useScorecard();
 
-  const [openDimension, setOpenDimension] = useState<string | null>(null)
+  const [openDimension, setOpenDimension] = useState<string | null>(null);
 
   if (status === 'loading') {
-    return (
-      <div className="flex justify-center py-20">
-        <Spinner className="h-8 w-8" />
-      </div>
-    )
+    return <EvaluationSkeleton />;
   }
 
   if (status === 'processing') {
     return (
-      <Card className="mx-auto max-w-xl p-8 text-center animate-fade-up">
-        <Spinner className="mx-auto h-6 w-6" />
-        <h2 className="mt-4 text-lg font-semibold text-fg-strong">Analysis in progress</h2>
-        <p className="mt-2 text-sm text-fg-muted">The evaluation is being generated. Please wait.</p>
-        <Button className="mt-4" variant="secondary" onClick={refresh}>Check again</Button>
-      </Card>
-    )
+      <EvaluationSkeleton />
+    );
   }
 
   if (status === 'needs-review') {
-    return <ReviewBanner />
+    return <ReviewBanner />;
   }
 
   if (status === 'not-found') {
@@ -42,7 +79,7 @@ export function EvaluationTab() {
       <Alert variant="error" title="Interview not found">
         This interview does not exist or was removed.
       </Alert>
-    )
+    );
   }
 
   if (status === 'error' || !scorecard || scorecard.status !== 'scored') {
@@ -54,7 +91,7 @@ export function EvaluationTab() {
       >
         {error ?? 'Something went wrong.'}
       </Alert>
-    )
+    );
   }
 
   return (
@@ -74,13 +111,7 @@ export function EvaluationTab() {
         </p>
       </motion.div>
 
-      {/* 
-        التعديل الجوهري: 
-        - grid-cols-2: عمودان.
-        - items-start: يمنع البطاقات من التمدد لتساوي أطول بطاقة في الصف.
-        - auto-rows-max: كل صف يأخذ أقصى ارتفاع لعناصره (لضمان أن الصف التالي لا يتأثر).
-      */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 items-start auto-rows-max">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 items-start">
         {scorecard.dimensions?.map((dim) => {
           const isOpen = openDimension === dim.name;
           
@@ -88,17 +119,16 @@ export function EvaluationTab() {
             <motion.div 
               key={dim.name} 
               variants={fadeUp} 
-              // align-self-start: يضمن أن البطاقة لا تتمدد لتملأ ارتفاع الصف
-              className="h-auto w-full self-start"
             >
               <Card className={cn(
                 "flex flex-col p-6 transition-all duration-300 hover:shadow-lift hover:border-line-strong",
+                "min-h-[220px]",
                 isOpen && "border-accent-500 ring-1 ring-accent-500/20 shadow-lift"
               )}>
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="text-base font-semibold text-fg-strong">{dim.name}</h3>
                   <span className={cn(
-                    "rounded-lg px-3 py-1 text-sm font-semibold",
+                    "shrink-0 rounded-lg px-3 py-1 text-sm font-semibold",
                     dim.score < 3 ? "bg-danger-50 text-danger-700 dark:bg-danger-500/10 dark:text-danger-500" :
                     dim.score === 3 ? "bg-warning-50 text-warning-700 dark:bg-warning-500/10 dark:text-warning-500" :
                     "bg-success-50 text-success-700 dark:bg-success-500/10 dark:text-success-500"
@@ -107,8 +137,7 @@ export function EvaluationTab() {
                   </span>
                 </div>
                 
-                {/* النص: نستخدم min-h لضمان ارتفاع موحد للبطاقات المغلقة */}
-                <p className="mt-3 min-h-[80px] text-sm leading-relaxed text-fg-muted">
+                <p className="mt-3 flex-1 text-sm leading-relaxed text-fg-muted">
                   {dim.reason}
                 </p>
                 
@@ -164,5 +193,5 @@ export function EvaluationTab() {
         </Link>
       </motion.div>
     </motion.section>
-  )
+  );
 }
