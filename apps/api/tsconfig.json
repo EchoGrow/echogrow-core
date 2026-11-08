@@ -2,7 +2,7 @@
   "compilerOptions": {
     "target": "ES2023",
     "module": "node20",
-    "types": ["node"],
+    "types": ["node", "multer"],
     "esModuleInterop": true,
     "declaration": true,
     "removeComments": true,

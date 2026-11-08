@@ -284,13 +284,6 @@ export async function waitForPipeline(
 // Retry wrapper for slow/flaky internet
 // ------------------------------------------------------------
 
-/**
- * Uploads, polls, and if the pipeline ends with "failed" (e.g. transient
- * network error to Gemini), re-uploads up to `retries` more times.
- *
- * A unique email is generated per attempt so each retry creates a fresh
- * candidate + session (avoids hash collisions, keeps DB clean).
- */
 export async function runPipelineWithRetry(
   uploadFn: (uniqueEmail: string) => Promise<string>,
   pollFn: (id: string) => Promise<any>,
@@ -315,4 +308,51 @@ export async function runPipelineWithRetry(
   }
 
   throw lastError;
+}
+
+// ------------------------------------------------------------
+// Bulk upload helpers
+// ------------------------------------------------------------
+
+/**
+ * Attaches bulk files to a supertest request.
+ * Usage:
+ *   const req = api().post('/interviews/bulk-upload').field('metadata', JSON.stringify(meta));
+ *   attachBulkFiles(req, files);
+ *   const res = await req;
+ */
+export function attachBulkFiles(
+  req: any,
+  files: { filename: string; content: string | Buffer }[],
+) {
+  for (const f of files) {
+    req.attach(
+      'files',
+      Buffer.isBuffer(f.content) ? f.content : Buffer.from(f.content),
+      f.filename,
+    );
+  }
+  return req;
+}
+
+/**
+ * Returns a synthetic transcript/cv pair (short, deterministic, no LLM).
+ */
+export function validBulkPair(suffix: string) {
+  return {
+    transcript: {
+      filename: `transcript-${suffix}.txt`,
+      content: SHORT_TRANSCRIPT,
+    },
+    resume: {
+      filename: `resume-${suffix}.txt`,
+      content: SHORT_CV,
+    },
+    metadata: {
+      candidateName: `Bulk Candidate ${suffix}`,
+      candidateEmail: `bulk.${suffix}@example.com`,
+      transcriptFileName: `transcript-${suffix}.txt`,
+      resumeFileName: `resume-${suffix}.txt`,
+    },
+  };
 }

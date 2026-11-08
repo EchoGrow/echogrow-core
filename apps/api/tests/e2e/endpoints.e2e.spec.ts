@@ -11,6 +11,8 @@ import {
   sha256,
   SHORT_TRANSCRIPT,
   SHORT_CV,
+  attachBulkFiles,
+  validBulkPair,
 } from './setup';
 
 describe('E2E: REST endpoints (no LLM calls)', () => {
@@ -60,7 +62,6 @@ describe('E2E: REST endpoints (no LLM calls)', () => {
       expect(res.body.interviewId).toBeTruthy();
       expect(res.body.status).toBe('queued');
 
-      // wait for the (LLM-free) job to finish so cleanup doesn't race the worker
       await pollNeedsReview(res.body.interviewId);
 
       const session = await prisma.interviewSession.findUnique({
@@ -187,7 +188,7 @@ describe('E2E: REST endpoints (no LLM calls)', () => {
       expect(body.discrepancies).toHaveLength(2);
       for (const d of body.discrepancies) {
         expect(d.id).toBeTruthy();
-        expect(d.field).toMatch(/^team_size_/); // DB "claim" is exposed as "field"
+        expect(d.field).toMatch(/^team_size_/);
         expect(d.cvQuote).toBeTruthy();
         expect(d.interviewQuote).toBeTruthy();
         expect(d.confidence).toBe(0.9);
@@ -240,7 +241,7 @@ describe('E2E: REST endpoints (no LLM calls)', () => {
       await api().patch(`/discrepancies/${discrepancyIds[0]}`).send(payload).expect(400);
 
       const db = await prisma.discrepancy.findUnique({ where: { id: discrepancyIds[0] } });
-      expect(db?.status).toBe('PENDING'); // unchanged
+      expect(db?.status).toBe('PENDING');
     });
 
     it('404 for unknown discrepancy', async () => {
@@ -311,7 +312,7 @@ describe('E2E: REST endpoints (no LLM calls)', () => {
         await api().post(`/interviews/${s.id}/force-evaluate`).expect(400);
 
         const db = await prisma.interviewSession.findUnique({ where: { id: s.id } });
-        expect(db?.status).toBe(status); // unchanged
+        expect(db?.status).toBe(status);
       },
     );
   });
@@ -340,5 +341,282 @@ describe('E2E: REST endpoints (no LLM calls)', () => {
         await api().post(`/interviews/${s.id}/reject`).expect(400);
       },
     );
+  });
+
+  // ============================================================
+  // POST /interviews/bulk-upload
+  // ============================================================
+  describe('POST /interviews/bulk-upload', () => {
+    // ---- Reject: malformed request ----
+    it('400 when no files are attached', async () => {
+      await api()
+        .post('/interviews/bulk-upload')
+        .field('metadata', JSON.stringify([]))
+        .expect(400);
+    });
+
+    it('400 when metadata field is missing', async () => {
+      const req = api().post('/interviews/bulk-upload');
+      req.attach('files', Buffer.from(SHORT_TRANSCRIPT), 'transcript.txt');
+      await req.expect(400);
+    });
+
+    it('400 when metadata is not valid JSON', async () => {
+      const req = api().post('/interviews/bulk-upload').field('metadata', 'not-json{');
+      req.attach('files', Buffer.from(SHORT_TRANSCRIPT), 'transcript.txt');
+      await req.expect(400);
+    });
+
+    it('400 when metadata is not an array', async () => {
+      const req = api()
+        .post('/interviews/bulk-upload')
+        .field('metadata', JSON.stringify({ candidateName: 'X' }));
+      req.attach('files', Buffer.from(SHORT_TRANSCRIPT), 'transcript.txt');
+      await req.expect(400);
+    });
+
+    it('400 when metadata is empty array', async () => {
+      const req = api()
+        .post('/interviews/bulk-upload')
+        .field('metadata', JSON.stringify([]));
+      req.attach('files', Buffer.from(SHORT_TRANSCRIPT), 'transcript.txt');
+      await req.expect(400);
+    });
+
+    it('400 when more than 50 candidates are submitted', async () => {
+      const metadata = Array.from({ length: 51 }, (_, i) => ({
+        candidateName: `C${i}`,
+        candidateEmail: `c${i}.bulk@example.com`,
+        transcriptFileName: `t${i}.txt`,
+        resumeFileName: `r${i}.txt`,
+      }));
+
+      const req = api()
+        .post('/interviews/bulk-upload')
+        .field('metadata', JSON.stringify(metadata));
+      req.attach('files', Buffer.from(SHORT_TRANSCRIPT), 't0.txt');
+
+      const res = await req.expect(400);
+      expect(res.body.message).toMatch(/Too many candidates/);
+      expect(res.body.message).toMatch(/51/);
+      expect(res.body.message).toMatch(/50/);
+    });
+
+    it('400 when metadata contains an invalid candidate shape', async () => {
+      const metadata = [
+        {
+          candidateName: 'A',
+          candidateEmail: 'not-an-email',
+          transcriptFileName: '',
+          resumeFileName: '',
+        },
+      ];
+      const req = api()
+        .post('/interviews/bulk-upload')
+        .field('metadata', JSON.stringify(metadata));
+      req.attach('files', Buffer.from(SHORT_TRANSCRIPT), 't.txt');
+      await req.expect(400);
+    });
+
+    // ---- Success: single candidate ----
+    it('201 with a single valid candidate pair', async () => {
+      const pair = validBulkPair('single');
+      const req = api()
+        .post('/interviews/bulk-upload')
+        .field('metadata', JSON.stringify([pair.metadata]));
+      attachBulkFiles(req, [pair.transcript, pair.resume]);
+
+      const res = await req.expect(201);
+      expect(res.body.summary).toEqual({
+        total: 1,
+        queued: 1,
+        failed: 0,
+        rejectedFilesCount: 0,
+      });
+      expect(res.body.results).toHaveLength(1);
+      expect(res.body.results[0].status).toBe('queued');
+      expect(res.body.results[0].interviewId).toBeTruthy();
+      expect(res.body.rejectedFiles).toEqual([]);
+
+      await pollNeedsReview(res.body.results[0].interviewId);
+
+      const session = await prisma.interviewSession.findUnique({
+        where: { id: res.body.results[0].interviewId },
+        include: { candidate: true },
+      });
+      expect(session?.candidate.email).toBe(pair.metadata.candidateEmail);
+    }, 60_000);
+
+    // ---- Success: multiple candidates ----
+    it('201 with 3 candidates, all queued', async () => {
+      const pairs = [validBulkPair('m1'), validBulkPair('m2'), validBulkPair('m3')];
+      const req = api()
+        .post('/interviews/bulk-upload')
+        .field('metadata', JSON.stringify(pairs.map((p) => p.metadata)));
+      attachBulkFiles(req, pairs.flatMap((p) => [p.transcript, p.resume]));
+
+      const res = await req.expect(201);
+      expect(res.body.summary).toEqual({
+        total: 3,
+        queued: 3,
+        failed: 0,
+        rejectedFilesCount: 0,
+      });
+      expect(res.body.results.every((r: any) => r.status === 'queued')).toBe(true);
+
+      for (const r of res.body.results) {
+        await pollNeedsReview(r.interviewId);
+      }
+    }, 120_000);
+
+    // ---- Partial failure: missing file ----
+    it('201 with mixed results: one queued, one failed (missing file)', async () => {
+      const ok = validBulkPair('ok');
+      const missing = {
+        candidateName: 'Missing File',
+        candidateEmail: 'missing.bulk@example.com',
+        transcriptFileName: 'never-uploaded.txt',
+        resumeFileName: 'also-never-uploaded.txt',
+      };
+
+      const req = api()
+        .post('/interviews/bulk-upload')
+        .field('metadata', JSON.stringify([ok.metadata, missing]));
+      attachBulkFiles(req, [ok.transcript, ok.resume]);
+
+      const res = await req.expect(201);
+      expect(res.body.summary.total).toBe(2);
+      expect(res.body.summary.queued).toBe(1);
+      expect(res.body.summary.failed).toBe(1);
+
+      const queued = res.body.results.find((r: any) => r.status === 'queued');
+      const failed = res.body.results.find((r: any) => r.status === 'error');
+      expect(queued.interviewId).toBeTruthy();
+      expect(failed.error).toMatch(/Transcript file .* not uploaded/);
+
+      await pollNeedsReview(queued.interviewId);
+    }, 60_000);
+
+    // ---- Partial failure: short transcript ----
+    it('201 with one failed candidate because transcript is too short', async () => {
+      const metadata = {
+        candidateName: 'Short Transcript',
+        candidateEmail: 'short.bulk@example.com',
+        transcriptFileName: 'short.txt',
+        resumeFileName: 'short-resume.txt',
+      };
+
+      const req = api()
+        .post('/interviews/bulk-upload')
+        .field('metadata', JSON.stringify([metadata]));
+      req.attach('files', Buffer.from('too short'), 'short.txt');
+      req.attach('files', Buffer.from(SHORT_CV), 'short-resume.txt');
+
+      const res = await req.expect(201);
+      expect(res.body.summary.total).toBe(1);
+      expect(res.body.summary.queued).toBe(0);
+      expect(res.body.summary.failed).toBe(1);
+      expect(res.body.results[0].status).toBe('error');
+      expect(res.body.results[0].error).toMatch(/Transcript is too short/);
+      expect(res.body.results[0].error).toMatch(/< 40 chars/);
+    });
+
+    // ---- Partial failure: oversized file (rejected individually) ----
+    it('201 rejects files larger than 2MB individually, processes the rest', async () => {
+      const ok = validBulkPair('ok2');
+      const bigFile = {
+        filename: 'big-resume.txt',
+        content: Buffer.alloc(3 * 1024 * 1024, 'A'),
+      };
+      const bigCandidate = {
+        candidateName: 'Big Resume',
+        candidateEmail: 'big.bulk@example.com',
+        transcriptFileName: ok.transcript.filename,
+        resumeFileName: bigFile.filename,
+      };
+
+      const req = api()
+        .post('/interviews/bulk-upload')
+        .field('metadata', JSON.stringify([bigCandidate]));
+      req.attach('files', bigFile.content, bigFile.filename);
+      req.attach('files', Buffer.from(SHORT_TRANSCRIPT), ok.transcript.filename);
+
+      const res = await req.expect(201);
+      expect(res.body.rejectedFiles).toHaveLength(1);
+      expect(res.body.rejectedFiles[0].filename).toBe('big-resume.txt');
+      expect(res.body.rejectedFiles[0].reason).toMatch(/too large/);
+      expect(res.body.rejectedFiles[0].sizeBytes).toBe(3 * 1024 * 1024);
+      expect(res.body.summary.rejectedFilesCount).toBe(1);
+      expect(res.body.summary.failed).toBe(1);
+      expect(res.body.results[0].error).toMatch(/Resume file .* was not uploaded or was rejected/);
+    });
+
+    // ---- Partial failure: empty file (rejected individually) ----
+    it('201 rejects empty files individually', async () => {
+      const metadata = {
+        candidateName: 'Empty File',
+        candidateEmail: 'empty.bulk@example.com',
+        transcriptFileName: 'empty.txt',
+        resumeFileName: 'empty-resume.txt',
+      };
+
+      const req = api()
+        .post('/interviews/bulk-upload')
+        .field('metadata', JSON.stringify([metadata]));
+      req.attach('files', Buffer.alloc(0), 'empty.txt');
+      req.attach('files', Buffer.from(SHORT_CV), 'empty-resume.txt');
+
+      const res = await req.expect(201);
+      expect(res.body.rejectedFiles).toHaveLength(1);
+      expect(res.body.rejectedFiles[0].filename).toBe('empty.txt');
+      expect(res.body.rejectedFiles[0].reason).toMatch(/empty/);
+      expect(res.body.rejectedFiles[0].sizeBytes).toBe(0);
+      expect(res.body.summary.failed).toBe(1);
+    });
+
+    // ---- Case-insensitive filename matching ----
+    it('matches filenames case-insensitively', async () => {
+      const metadata = {
+        candidateName: 'Case Test',
+        candidateEmail: 'case.bulk@example.com',
+        transcriptFileName: 'TRANSCRIPT.TXT',
+        resumeFileName: 'RESUME.TXT',
+      };
+
+      const req = api()
+        .post('/interviews/bulk-upload')
+        .field('metadata', JSON.stringify([metadata]));
+      req.attach('files', Buffer.from(SHORT_TRANSCRIPT), 'transcript.txt');
+      req.attach('files', Buffer.from(SHORT_CV), 'resume.txt');
+
+      const res = await req.expect(201);
+      expect(res.body.summary.queued).toBe(1);
+
+      await pollNeedsReview(res.body.results[0].interviewId);
+    }, 60_000);
+
+    // ---- Idempotency: same file uploaded twice = 2 sessions ----
+    it('creates a separate session when the same file is uploaded twice', async () => {
+      const pair = validBulkPair('dup');
+
+      const req1 = api()
+        .post('/interviews/bulk-upload')
+        .field('metadata', JSON.stringify([pair.metadata]));
+      attachBulkFiles(req1, [pair.transcript, pair.resume]);
+      const res1 = await req1.expect(201);
+      await pollNeedsReview(res1.body.results[0].interviewId);
+
+      const req2 = api()
+        .post('/interviews/bulk-upload')
+        .field('metadata', JSON.stringify([pair.metadata]));
+      attachBulkFiles(req2, [pair.transcript, pair.resume]);
+      const res2 = await req2.expect(201);
+      await pollNeedsReview(res2.body.results[0].interviewId);
+
+      const sessions = await prisma.interviewSession.count({
+        where: { candidate: { email: pair.metadata.candidateEmail } },
+      });
+      expect(sessions).toBe(2);
+    }, 120_000);
   });
 });
