@@ -13,10 +13,12 @@ import {
   Calendar,
   BarChart3,
   Sparkles,
-  CheckCircle2,
   Copy,
   Check,
   User,
+  Zap,
+  Clock,
+  Timer,
 } from 'lucide-react';
 import { SEO } from '../../components/SEO';
 import { Alert, Button, Card, toast } from '../../components/ui';
@@ -24,13 +26,13 @@ import { ReviewBanner } from '../../components/ui/ReviewBanner';
 import { ProcessingState } from '../../components/dashboard/ProcessingState';
 import { useScorecard } from '../../lib/scorecard/useScorecard';
 import { forceEvaluation } from '../../lib/api';
-import type { ScorecardDimension } from '../../lib/api';
+import type { ScorecardDimension, TimeSavedBreakdown } from '../../lib/api';
 import { cn } from '../../lib/cn';
 import { fadeUp, scaleIn, staggerContainer } from '../../lib/animations';
 
 const MAX_SCORE = 5;
 
-type Tone = 'danger' | 'warning' | 'success';
+type Tone = 'danger' | 'warning' | 'success' | 'neutral';
 
 const TONES: Record<
   Tone,
@@ -41,9 +43,9 @@ const TONES: Record<
     bar: string;
     dot: string;
     label: string;
-    border: string;
     gradient: string;
     ring: string;
+    iconBg: string;
   }
 > = {
   danger: {
@@ -53,9 +55,9 @@ const TONES: Record<
     bar: 'bg-danger-500',
     dot: 'bg-danger-500',
     label: 'Below the bar',
-    border: 'border-t-danger-500',
-    gradient: 'from-danger-500/10 to-transparent',
+    gradient: 'from-danger-500/[0.08] via-transparent to-transparent',
     ring: 'ring-danger-500/20',
+    iconBg: 'bg-danger-50 text-danger-600 dark:bg-danger-500/15 dark:text-danger-500 ring-danger-500/20',
   },
   warning: {
     text: 'text-warning-700 dark:text-warning-500',
@@ -64,9 +66,9 @@ const TONES: Record<
     bar: 'bg-warning-500',
     dot: 'bg-warning-500',
     label: 'On the bar',
-    border: 'border-t-warning-500',
-    gradient: 'from-warning-500/10 to-transparent',
+    gradient: 'from-warning-500/[0.08] via-transparent to-transparent',
     ring: 'ring-warning-500/20',
+    iconBg: 'bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-warning-500 ring-warning-500/20',
   },
   success: {
     text: 'text-success-700 dark:text-success-500',
@@ -75,9 +77,20 @@ const TONES: Record<
     bar: 'bg-success-500',
     dot: 'bg-success-500',
     label: 'Above the bar',
-    border: 'border-t-success-500',
-    gradient: 'from-success-500/10 to-transparent',
+    gradient: 'from-success-500/[0.08] via-transparent to-transparent',
     ring: 'ring-success-500/20',
+    iconBg: 'bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500 ring-success-500/20',
+  },
+  neutral: {
+    text: 'text-fg-strong',
+    bg: 'bg-chip',
+    stroke: 'stroke-accent-500',
+    bar: 'bg-accent-500',
+    dot: 'bg-accent-500',
+    label: 'Neutral',
+    gradient: 'from-accent-500/[0.06] via-transparent to-transparent',
+    ring: 'ring-accent-500/20',
+    iconBg: 'bg-accent-500/15 text-accent-700 dark:text-accent-300 ring-accent-500/20',
   },
 };
 
@@ -91,11 +104,7 @@ function formatDate(value?: string): string {
   if (!value) return 'Date unavailable';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'Date unavailable';
-  return new Intl.DateTimeFormat('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  }).format(date);
+  return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).format(date);
 }
 
 function averageScore(dimensions: ScorecardDimension[]): number {
@@ -105,6 +114,18 @@ function averageScore(dimensions: ScorecardDimension[]): number {
 
 function showCount(value?: number): string {
   return typeof value === 'number' ? String(value) : '—';
+}
+
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${Math.round(seconds)} sec`;
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.round(seconds % 60);
+  return secs > 0 ? `${mins} min ${secs} sec` : `${mins} min`;
+}
+
+function formatSavedTime(timeSaved: TimeSavedBreakdown): string {
+  if (timeSaved.savedMinutes > 0) return `${timeSaved.savedMinutes} min`;
+  return `${timeSaved.savedSeconds} sec`;
 }
 
 function nextStepSentence(pendingDiscrepancies?: number): string {
@@ -149,10 +170,7 @@ function PageHeading({
       variants={fadeUp}
       className="relative overflow-hidden rounded-2xl border border-line bg-gradient-to-br from-accent-50 via-surface-card to-surface-card p-6 sm:p-8 dark:from-accent-500/5 dark:via-surface-card dark:to-surface-card"
     >
-      <svg
-        className="absolute inset-0 h-full w-full opacity-[0.04] dark:opacity-[0.06]"
-        aria-hidden="true"
-      >
+      <svg className="absolute inset-0 h-full w-full opacity-[0.04] dark:opacity-[0.06]" aria-hidden="true">
         <defs>
           <pattern id="overview-grid" width="24" height="24" patternUnits="userSpaceOnUse">
             <path d="M 24 0 L 0 0 0 24" fill="none" stroke="currentColor" strokeWidth="1" />
@@ -161,19 +179,9 @@ function PageHeading({
         <rect width="100%" height="100%" fill="url(#overview-grid)" />
       </svg>
 
-      <div
-        className="absolute -right-20 -top-20 h-56 w-56 rounded-full bg-accent-500/10 blur-3xl"
-        aria-hidden="true"
-      />
-      <div
-        className="absolute -bottom-20 -left-20 h-56 w-56 rounded-full bg-accent-500/5 blur-3xl"
-        aria-hidden="true"
-      />
-
-      <div
-        className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-accent-500 to-transparent"
-        aria-hidden="true"
-      />
+      <div className="absolute -right-20 -top-20 h-56 w-56 rounded-full bg-accent-500/10 blur-3xl" aria-hidden="true" />
+      <div className="absolute -bottom-20 -left-20 h-56 w-56 rounded-full bg-accent-500/5 blur-3xl" aria-hidden="true" />
+      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-accent-500 to-transparent" aria-hidden="true" />
 
       <div className="relative flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-start gap-4 min-w-0 flex-1">
@@ -185,14 +193,7 @@ function PageHeading({
           >
             <User className="h-5 w-5 text-accent-600 dark:text-accent-400" strokeWidth={2.5} />
             <div className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-accent-500 to-accent-700 text-[9px] font-bold text-white shadow-sm ring-2 ring-surface-card">
-              {candidateName
-                .trim()
-                .split(/\s+/)
-                .slice(0, 2)
-                .map((part) => part[0])
-                .join('')
-                .toUpperCase()
-                .slice(0, 2)}
+              {candidateName.trim().split(/\s+/).slice(0, 2).map((p) => p[0]).join('').toUpperCase().slice(0, 2)}
             </div>
           </motion.div>
 
@@ -231,12 +232,7 @@ function PageHeading({
           </div>
         </div>
 
-        <span
-          className={cn(
-            'inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium',
-            'border-success-500/30 bg-success-50 text-success-700 dark:bg-success-500/10 dark:text-success-500',
-          )}
-        >
+        <span className="inline-flex shrink-0 items-center gap-2 rounded-full border border-success-500/30 bg-success-50 px-3 py-1.5 text-xs font-medium text-success-700 dark:bg-success-500/10 dark:text-success-500">
           <span className="relative flex h-2 w-2">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success-500 opacity-75" />
             <span className="relative inline-flex h-2 w-2 rounded-full bg-success-500" />
@@ -249,7 +245,7 @@ function PageHeading({
 }
 
 // ============================================================
-// Average Score Card
+// Average Score Card (Row 1, Col 1) — redesigned
 // ============================================================
 function AverageScoreCard({ average, count }: { average: number; count: number }) {
   const tone = TONES[toneFor(average)];
@@ -259,30 +255,27 @@ function AverageScoreCard({ average, count }: { average: number; count: number }
 
   return (
     <motion.div variants={scaleIn} className="h-full">
-      <Card
-        className={cn(
-          'group relative flex h-full flex-col overflow-hidden border-t-2 p-5 shadow-sm ring-1 ring-transparent transition-all duration-300 hover:shadow-lift hover:ring-line-strong',
-          tone.border,
-        )}
-      >
+      <Card className="group relative flex h-full flex-col overflow-hidden p-5 shadow-sm ring-1 ring-line/60 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lift hover:ring-line-strong">
+        {/* Soft gradient overlay */}
         <div
           className={cn(
-            'pointer-events-none absolute inset-0 bg-gradient-to-b opacity-0 transition-opacity duration-300 group-hover:opacity-100',
+            'pointer-events-none absolute inset-0 bg-gradient-to-br opacity-70 transition-opacity duration-300 group-hover:opacity-100',
             tone.gradient,
           )}
           aria-hidden="true"
         />
 
-        <div className="relative flex justify-center pt-1">
-          <div className="relative h-24 w-24">
-            <svg viewBox="0 0 88 88" className="h-24 w-24 -rotate-90" aria-hidden="true">
-              <circle cx="44" cy="44" r={radius} fill="none" strokeWidth="8" className="stroke-chip" />
+        <div className="relative flex flex-1 items-center gap-5">
+          {/* Circle */}
+          <div className="relative h-[88px] w-[88px] shrink-0">
+            <svg viewBox="0 0 88 88" className="h-[88px] w-[88px] -rotate-90" aria-hidden="true">
+              <circle cx="44" cy="44" r={radius} fill="none" strokeWidth="7" className="stroke-chip" />
               <motion.circle
                 cx="44"
                 cy="44"
                 r={radius}
                 fill="none"
-                strokeWidth="8"
+                strokeWidth="7"
                 strokeLinecap="round"
                 className={tone.stroke}
                 strokeDasharray={circumference}
@@ -292,33 +285,43 @@ function AverageScoreCard({ average, count }: { average: number; count: number }
               />
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-2xl font-bold tabular-nums text-fg-strong">
+              <span className="text-xl font-bold tabular-nums leading-none text-fg-strong">
                 {average.toFixed(1)}
               </span>
-              <span className="text-[10px] font-medium text-fg-subtle">/ {MAX_SCORE}</span>
+              <span className="mt-0.5 text-[9px] font-semibold uppercase tracking-wider text-fg-subtle">
+                / {MAX_SCORE}
+              </span>
             </div>
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-fg-muted">
+              Overall score
+            </p>
+            <div className="mt-1.5 flex items-baseline gap-1.5">
+              <span className="text-2xl font-bold tabular-nums leading-none text-fg-strong">
+                {average.toFixed(1)}
+              </span>
+              <span className="text-xs font-medium text-fg-muted">/ {MAX_SCORE}</span>
+            </div>
+            <span
+              className={cn(
+                'mt-2 inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ring-1',
+                tone.text,
+                tone.bg,
+                tone.ring,
+              )}
+            >
+              <span className={cn('h-1 w-1 shrink-0 rounded-full', tone.dot)} />
+              {tone.label}
+            </span>
           </div>
         </div>
 
-        <div className="relative mt-3 flex flex-col items-center gap-1.5 text-center">
-          <p className="text-xs font-medium text-fg-muted">Average score</p>
-          <span
-            className={cn(
-              'inline-flex max-w-full items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ring-1',
-              tone.text,
-              tone.bg,
-              tone.ring,
-            )}
-          >
-            <span className={cn('h-1 w-1 shrink-0 rounded-full', tone.dot)} />
-            <span className="truncate">{tone.label}</span>
-          </span>
-        </div>
-
-        <div className="relative mt-auto border-t border-line pt-3">
-          <p className="text-center text-xs text-fg-muted">
-            Averaged across <span className="font-semibold text-fg-strong">{count}</span> dimensions
-          </p>
+        {/* Footer */}
+        <div className="relative mt-4 flex items-center justify-between border-t border-line/70 pt-3 text-[11px]">
+          <span className="text-fg-muted">Averaged across</span>
+          <span className="font-semibold text-fg-strong">{count} dimensions</span>
         </div>
       </Card>
     </motion.div>
@@ -326,7 +329,7 @@ function AverageScoreCard({ average, count }: { average: number; count: number }
 }
 
 // ============================================================
-// Stat Card
+// Stat Card (Row 1, Col 2/3) — redesigned
 // ============================================================
 function StatCard({
   label,
@@ -345,45 +348,46 @@ function StatCard({
   href?: string;
   hrefLabel?: string;
 }) {
-  const styles = tone ? TONES[tone] : null;
+  const styles = TONES[tone ?? 'neutral'];
 
   const card = (
-    <Card
-      className={cn(
-        'group relative flex h-full flex-col overflow-hidden border-t-2 p-5 shadow-sm ring-1 ring-transparent transition-all duration-300 hover:shadow-lift hover:border-line-strong hover:ring-line-strong',
-        styles?.border ?? 'border-t-transparent',
-      )}
-    >
+    <Card className="group relative flex h-full flex-col overflow-hidden p-5 shadow-sm ring-1 ring-line/60 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lift hover:ring-line-strong">
+      {/* Soft gradient overlay */}
       <div
         className={cn(
-          'pointer-events-none absolute inset-0 bg-gradient-to-b opacity-0 transition-opacity duration-300 group-hover:opacity-100',
-          styles?.gradient ?? 'from-accent-500/5 to-transparent',
+          'pointer-events-none absolute inset-0 bg-gradient-to-br opacity-70 transition-opacity duration-300 group-hover:opacity-100',
+          styles.gradient,
         )}
         aria-hidden="true"
       />
 
-      <div className="relative flex items-start justify-between gap-3">
-        <p className="text-sm font-medium text-fg-muted">{label}</p>
+      {/* Top row: icon + label */}
+      <div className="relative flex items-center justify-between gap-3">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-fg-muted">
+          {label}
+        </p>
         <span
           aria-hidden="true"
           className={cn(
-            'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 transition-all duration-300 group-hover:scale-110 group-hover:rotate-3',
-            styles ? styles.bg : 'bg-chip',
-            styles ? styles.text : 'text-fg-muted',
-            styles ? styles.ring : 'ring-line',
+            'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ring-1 transition-all duration-300 group-hover:scale-105',
+            styles.iconBg,
           )}
         >
           {icon}
         </span>
       </div>
 
+      {/* Value */}
       <p className="relative mt-3 text-3xl font-bold tracking-tight tabular-nums text-fg-strong">
         {value}
       </p>
+
+      {/* Hint */}
       <p className="relative mt-1 text-xs leading-relaxed text-fg-muted">{hint}</p>
 
+      {/* Footer link */}
       {href ? (
-        <span className="relative mt-auto inline-flex items-center gap-1 pt-4 text-xs font-semibold text-accent-700 transition-all duration-200 group-hover:gap-2 dark:text-accent-300">
+        <span className="relative mt-auto inline-flex items-center gap-1 pt-4 text-[11px] font-semibold text-accent-700 transition-colors group-hover:text-accent-800 dark:text-accent-300 dark:group-hover:text-accent-200">
           {hrefLabel}
           <ArrowRight className="h-3 w-3 transition-transform duration-200 group-hover:translate-x-0.5" />
         </span>
@@ -412,13 +416,101 @@ function StatCard({
 }
 
 // ============================================================
+// Time Saved Card (Row 2, Col 2/3) — redesigned
+// ============================================================
+function TimeSavedCard({ timeSaved }: { timeSaved?: TimeSavedBreakdown }) {
+  const data: TimeSavedBreakdown = timeSaved ?? {
+    manualMinutes: 45,
+    echoGrowSeconds: 180,
+    savedMinutes: 42,
+    savedSeconds: 0,
+  };
+
+  // Compute saved ratio for the bar
+  const manualSeconds = data.manualMinutes * 60;
+  const savedPercent = manualSeconds > 0
+    ? Math.min(100, Math.round((data.savedSeconds / manualSeconds) * 100))
+    : 0;
+
+  return (
+    <motion.div variants={fadeUp} className="h-full">
+      <Card className="group relative flex h-full flex-col overflow-hidden p-5 shadow-sm ring-1 ring-line/60 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lift hover:ring-line-strong">
+        {/* Soft success gradient */}
+        <div
+          className="pointer-events-none absolute inset-0 bg-gradient-to-br from-success-500/[0.08] via-transparent to-transparent opacity-70 transition-opacity duration-300 group-hover:opacity-100"
+          aria-hidden="true"
+        />
+
+        {/* Top row: label + icon */}
+        <div className="relative flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-fg-muted">
+              Time saved
+            </p>
+            <p className="mt-1 flex items-baseline gap-1.5">
+              <span className="text-3xl font-bold tracking-tight tabular-nums text-success-700 dark:text-success-500">
+                {formatSavedTime(data)}
+              </span>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-success-700/70 dark:text-success-500/70">
+                saved
+              </span>
+            </p>
+          </div>
+          <span
+            aria-hidden="true"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-success-50 text-success-600 ring-1 ring-success-500/20 transition-all duration-300 group-hover:scale-105 dark:bg-success-500/15 dark:text-success-500"
+          >
+            <Zap className="h-4 w-4" />
+          </span>
+        </div>
+
+        {/* Comparison bar */}
+        <div className="relative mt-4">
+          <div className="flex items-center justify-between text-[10px] font-medium">
+            <span className="inline-flex items-center gap-1 text-fg-muted">
+              <Clock className="h-3 w-3" />
+              Manual
+            </span>
+            <span className="inline-flex items-center gap-1 text-accent-700 dark:text-accent-300">
+              EchoGrow
+              <Timer className="h-3 w-3" />
+            </span>
+          </div>
+
+          <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-chip">
+            <motion.div
+              className="h-full rounded-full bg-gradient-to-r from-success-500 to-accent-500"
+              initial={{ width: 0 }}
+              animate={{ width: `${savedPercent}%` }}
+              transition={{ duration: 1, ease: 'easeOut', delay: 0.3 }}
+            />
+          </div>
+
+          <div className="mt-1.5 flex items-center justify-between font-mono text-[11px]">
+            <span className="text-fg-muted">~{data.manualMinutes} min</span>
+            <span className="font-semibold text-accent-700 dark:text-accent-300">
+              {formatDuration(data.echoGrowSeconds)}
+            </span>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <p className="relative mt-auto pt-3 text-[10px] leading-relaxed text-fg-muted">
+          Based on transcript length, CV length, discrepancies, and weak dimensions
+        </p>
+      </Card>
+    </motion.div>
+  );
+}
+
+// ============================================================
 // Dimension Row
 // ============================================================
 function DimensionRow({ dimension }: { dimension: ScorecardDimension }) {
   const tone = TONES[toneFor(dimension.score)];
 
   return (
-    <li className="group relative overflow-hidden rounded-xl border border-line bg-surface-card p-4 transition-all duration-300 hover:border-line-strong hover:bg-chip/40 hover:shadow-card">
+    <li className="group relative overflow-hidden rounded-xl border border-line/80 bg-surface-card p-4 transition-all duration-300 hover:border-line-strong hover:bg-chip/40 hover:shadow-card">
       <div className="flex items-baseline justify-between gap-3">
         <p className="truncate text-sm font-medium text-fg-strong">{dimension.name}</p>
         <span
@@ -447,13 +539,7 @@ function DimensionRow({ dimension }: { dimension: ScorecardDimension }) {
 // ============================================================
 // Dimensions Card
 // ============================================================
-function DimensionsCard({
-  dimensions,
-  base,
-}: {
-  dimensions: ScorecardDimension[];
-  base: string;
-}) {
+function DimensionsCard({ dimensions, base }: { dimensions: ScorecardDimension[]; base: string }) {
   return (
     <motion.div variants={fadeUp}>
       <Card className="overflow-hidden p-0 shadow-sm">
@@ -501,14 +587,25 @@ function OverviewSkeleton() {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {[0, 1, 2, 3].map((index) => (
+      <div className="grid gap-4 sm:grid-cols-3">
+        {[0, 1, 2].map((index) => (
           <div key={index} className="rounded-card border border-line bg-surface-card p-5">
             <div className="h-4 w-24 rounded skeleton" />
             <div className="mt-4 h-8 w-16 rounded skeleton" />
             <div className="mt-3 h-3 w-28 rounded skeleton" />
           </div>
         ))}
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <div className="rounded-card border border-line bg-surface-card p-5">
+          <div className="h-4 w-24 rounded skeleton" />
+          <div className="mt-4 h-8 w-16 rounded skeleton" />
+        </div>
+        <div className="rounded-card border border-line bg-surface-card p-5 sm:col-span-2">
+          <div className="h-4 w-24 rounded skeleton" />
+          <div className="mt-4 h-8 w-32 rounded skeleton" />
+        </div>
       </div>
     </div>
   );
@@ -531,10 +628,7 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
       >
         {message}
       </Alert>
-      <Link
-        to="/upload"
-        className="mt-6 inline-flex items-center gap-1 text-sm font-semibold text-accent-700 hover:underline dark:text-accent-300"
-      >
+      <Link to="/upload" className="mt-6 inline-flex items-center gap-1 text-sm font-semibold text-accent-700 hover:underline dark:text-accent-300">
         ← Start a new analysis
       </Link>
     </div>
@@ -544,13 +638,8 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
 function NotFoundState() {
   return (
     <div className="mx-auto max-w-xl py-8">
-      <Alert variant="error" title="Interview not found">
-        This interview does not exist or was removed.
-      </Alert>
-      <Link
-        to="/upload"
-        className="mt-6 inline-flex items-center gap-1 text-sm font-semibold text-accent-700 hover:underline dark:text-accent-300"
-      >
+      <Alert variant="error" title="Interview not found">This interview does not exist or was removed.</Alert>
+      <Link to="/upload" className="mt-6 inline-flex items-center gap-1 text-sm font-semibold text-accent-700 hover:underline dark:text-accent-300">
         ← Start a new analysis
       </Link>
     </div>
@@ -561,20 +650,13 @@ function EmptyState({ base }: { base: string }) {
   return (
     <div className="mx-auto max-w-xl py-8">
       <Alert variant="info" title="No dimensions yet">
-        The scorecard was returned without any dimension scores. Re-run the analysis or check the
-        API response for this interview.
+        The scorecard was returned without any dimension scores. Re-run the analysis or check the API response for this interview.
       </Alert>
       <div className="mt-6 flex flex-wrap gap-3">
-        <Link
-          to="/upload"
-          className="text-sm font-semibold text-accent-700 hover:underline dark:text-accent-300"
-        >
+        <Link to="/upload" className="text-sm font-semibold text-accent-700 hover:underline dark:text-accent-300">
           ← Start a new analysis
         </Link>
-        <Link
-          to={`${base}/evaluation`}
-          className="text-sm font-semibold text-accent-700 hover:underline dark:text-accent-300"
-        >
+        <Link to={`${base}/evaluation`} className="text-sm font-semibold text-accent-700 hover:underline dark:text-accent-300">
           Open evaluation →
         </Link>
       </div>
@@ -606,14 +688,10 @@ function FailedState({ interviewId, onRetry }: { interviewId: string; onRetry: (
         <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-danger-500/15 text-danger-600">
           <AlertCircle className="h-6 w-6" />
         </span>
-        <h2 className="mt-5 text-lg font-semibold text-danger-700 dark:text-danger-500">
-          Analysis Failed
-        </h2>
+        <h2 className="mt-5 text-lg font-semibold text-danger-700 dark:text-danger-500">Analysis Failed</h2>
         <p className="mt-2 text-sm text-danger-700/80 dark:text-danger-500/80">
-          The AI pipeline encountered an error and could not complete the analysis. You can try
-          again or start a new one.
+          The AI pipeline encountered an error and could not complete the analysis. You can try again or start a new one.
         </p>
-
         <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
           <Button variant="primary" onClick={handleRetry} disabled={isRetrying}>
             <RotateCcw className={cn('mr-2 h-4 w-4', isRetrying && 'animate-spin')} />
@@ -640,9 +718,7 @@ export function OverviewTab() {
 
   useEffect(() => {
     if (status === 'rejected') {
-      toast.error('Session Rejected', {
-        description: 'This interview was rejected. Please upload a new one.',
-      });
+      toast.error('Session Rejected', { description: 'This interview was rejected. Please upload a new one.' });
       navigate('/upload', { replace: true });
     }
   }, [status, navigate]);
@@ -696,10 +772,7 @@ export function OverviewTab() {
     return (
       <>
         <SEO title="Interview overview" description="Candidate scorecard overview." noIndex />
-        <ErrorState
-          message={error ?? 'Something went wrong while loading the scorecard.'}
-          onRetry={refresh}
-        />
+        <ErrorState message={error ?? 'Something went wrong while loading the scorecard.'} onRetry={refresh} />
       </>
     );
   }
@@ -711,47 +784,30 @@ export function OverviewTab() {
     overallConfidence,
     pendingDiscrepancies,
     skillGaps,
+    timeSaved,
   } = scorecard;
   const average = averageScore(dimensions);
 
   return (
     <>
-      <SEO
-        title={`${candidateName} · Interview overview`}
-        description={`Scorecard overview for ${candidateName}.`}
-        noIndex
-      />
+      <SEO title={`${candidateName} · Interview overview`} description={`Scorecard overview for ${candidateName}.`} noIndex />
 
-      <motion.div
-        variants={staggerContainer}
-        initial="hidden"
-        animate="visible"
-        className="space-y-8"
-      >
-        <PageHeading
-          candidateName={candidateName}
-          interviewDate={interviewDate}
-          interviewId={interviewId}
-        />
+      <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-8">
+        <PageHeading candidateName={candidateName} interviewDate={interviewDate} interviewId={interviewId} />
 
         {dimensions.length === 0 ? (
           <EmptyState base={base} />
         ) : (
           <>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {/* Row 1: 3 cards (Overall, Discrepancies, Gaps) */}
+            <div className="grid gap-4 sm:grid-cols-3">
               <AverageScoreCard average={average} count={dimensions.length} />
 
               <StatCard
                 label="Pending discrepancies"
                 value={showCount(pendingDiscrepancies)}
                 hint="Claims that still need a human decision"
-                tone={
-                  typeof pendingDiscrepancies === 'number'
-                    ? pendingDiscrepancies > 0
-                      ? 'danger'
-                      : 'success'
-                    : undefined
-                }
+                tone={typeof pendingDiscrepancies === 'number' ? (pendingDiscrepancies > 0 ? 'danger' : 'success') : undefined}
                 href={`${base}/discrepancies`}
                 hrefLabel="Review claims"
                 icon={<Flag className="h-4 w-4" />}
@@ -761,22 +817,28 @@ export function OverviewTab() {
                 label="Skill gaps"
                 value={showCount(skillGaps)}
                 hint="Growth areas detected in the interview"
-                tone={
-                  typeof skillGaps === 'number' ? (skillGaps > 0 ? 'warning' : 'success') : undefined
-                }
+                tone={typeof skillGaps === 'number' ? (skillGaps > 0 ? 'warning' : 'success') : undefined}
                 href={`${base}/roadmap`}
                 hrefLabel="Open growth plan"
                 icon={<TrendingUp className="h-4 w-4" />}
               />
+            </div>
 
+            {/* Row 2: Confidence (1/3) + Time Saved (2/3) */}
+            <div className="grid gap-4 sm:grid-cols-3">
               <StatCard
                 label="Model confidence"
                 value={`${Math.round(overallConfidence * 100)}%`}
                 hint="How certain the scoring model is"
                 icon={<Target className="h-4 w-4" />}
               />
+
+              <div className="sm:col-span-2">
+                <TimeSavedCard timeSaved={timeSaved} />
+              </div>
             </div>
 
+            {/* Dimensions + Next Step */}
             <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
               <DimensionsCard dimensions={dimensions} base={base} />
 
@@ -830,8 +892,7 @@ export function OverviewTab() {
 
                   <div className="border-t border-line bg-gradient-to-r from-chip/30 to-transparent px-6 py-4">
                     <p className="text-xs leading-relaxed text-fg-muted">
-                      Scores are evidence-based, not a hiring decision. Every flag stays pending
-                      until a human reviews it.
+                      Scores are evidence-based, not a hiring decision. Every flag stays pending until a human reviews it.
                     </p>
                   </div>
                 </Card>
