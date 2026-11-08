@@ -18,6 +18,14 @@ export const EvaluationSchema = z.object({
   overallConfidence: z.number().min(0).max(1),
 });
 
+// Time saved breakdown (dynamic, based on transcript length, CV length, discrepancies, low-score dimensions)
+export const TimeSavedSchema = z.object({
+  manualMinutes: z.number().min(0),
+  echoGrowSeconds: z.number().min(0),
+  savedMinutes: z.number().min(0),
+  savedSeconds: z.number().min(0),
+});
+
 export const ScorecardSchema = z.union([
   z.object({
     status: z.literal('scored'),
@@ -28,6 +36,7 @@ export const ScorecardSchema = z.union([
     overallConfidence: z.number().min(0).max(1),
     pendingDiscrepancies: z.number().int().min(0),
     skillGaps: z.number().int().min(0),
+    timeSaved: TimeSavedSchema.optional(),
   }),
   z.object({
     status: z.literal('needs_review'),
@@ -49,4 +58,5 @@ export const ScorecardSchema = z.union([
 
 export type Dimension = z.infer<typeof DimensionSchema>;
 export type Evaluation = z.infer<typeof EvaluationSchema>;
+export type TimeSaved = z.infer<typeof TimeSavedSchema>;
 export type Scorecard = z.infer<typeof ScorecardSchema>;

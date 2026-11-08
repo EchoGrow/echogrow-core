@@ -1,20 +1,25 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   Target,
   BookOpen,
   ExternalLink,
   Calendar,
   Sparkles,
-  ChevronDown,
   AlertCircle,
   TrendingUp,
   CheckCircle2,
   Clock,
+  Download,
+  FileText,
+  FileJson,
+  Copy,
+  Check,
+  AlertTriangle,
 } from 'lucide-react';
 import { SEO } from '../../components/SEO';
-import { Alert, Button, Card, Spinner } from '../../components/ui';
+import { Alert, Button, Card, toast } from '../../components/ui';
 import { ReviewBanner } from '../../components/ui/ReviewBanner';
 import { useScorecard } from '../../lib/scorecard/useScorecard';
 import {
@@ -23,7 +28,13 @@ import {
   type RoadmapItemRecord,
   type SkillGapPriority,
 } from '../../lib/api';
-import { fadeUp, staggerContainer, scaleIn } from '../../lib/animations';
+import {
+  downloadRoadmapPDF,
+  copyRoadmapMarkdown,
+  downloadRoadmapJSON,
+  ExportValidationError,
+} from '../../lib/export/exportRoadmap';
+import { fadeUp, staggerContainer } from '../../lib/animations';
 import { cn } from '../../lib/cn';
 
 // ============================================================
@@ -214,16 +225,11 @@ function WeekCard({
   index: number;
   priority: SkillGapPriority;
 }) {
-  const [expanded, setExpanded] = useState(false);
   const style = PRIORITY_STYLES[priority];
   const isFallback = item.resourceUrl?.startsWith('https://www.google.com/search');
 
   return (
-    <motion.div
-      variants={fadeUp}
-      className="relative pl-16 sm:pl-20"
-    >
-      {/* Week badge */}
+    <motion.div variants={fadeUp} className="relative pl-16 sm:pl-20">
       <motion.div
         initial={{ scale: 0 }}
         animate={{ scale: 1 }}
@@ -246,7 +252,6 @@ function WeekCard({
         )}
       >
         <div className="p-5 sm:p-6">
-          {/* Header */}
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
@@ -272,12 +277,8 @@ function WeekCard({
             </div>
           </div>
 
-          {/* Task */}
-          <p className="mt-4 text-sm leading-relaxed text-fg">
-            {item.task}
-          </p>
+          <p className="mt-4 text-sm leading-relaxed text-fg">{item.task}</p>
 
-          {/* Resource link */}
           {item.resourceUrl ? (
             <div className="mt-4 border-t border-line pt-4">
               <a
@@ -315,11 +316,176 @@ function WeekCard({
 }
 
 // ============================================================
+// Export dropdown (with validation + disabled state)
+// ============================================================
+function ExportDropdown({
+  candidateName,
+  interviewDate,
+  roadmapData,
+  interviewId,
+}: {
+  candidateName: string;
+  interviewDate: string;
+  roadmapData: RoadmapResponse | null;
+  interviewId: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [exporting, setExporting] = useState<'pdf' | 'md' | 'json' | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  // Can we export? Need data + at least one gap/week.
+  const canExport =
+    roadmapData !== null &&
+    Array.isArray(roadmapData.gaps) &&
+    Array.isArray(roadmapData.roadmap) &&
+    roadmapData.roadmap.length > 0;
+
+  const showUnavailableToast = () => {
+    toast.error('Nothing to export', {
+      description:
+        'This candidate has no skill gaps, so there is no roadmap to export. Try another candidate.',
+      icon: <AlertTriangle className="h-4 w-4" />,
+    });
+  };
+
+  const handleValidationError = (cause: unknown) => {
+    const message =
+      cause instanceof ExportValidationError
+        ? cause.message
+        : cause instanceof Error
+          ? cause.message
+          : 'Unknown error during export.';
+    toast.error('Export failed', { description: message });
+  };
+
+  const handlePDF = async () => {
+    if (!canExport) {
+      setOpen(false);
+      showUnavailableToast();
+      return;
+    }
+    setOpen(false);
+    setExporting('pdf');
+    try {
+      await downloadRoadmapPDF(candidateName, interviewDate, roadmapData, interviewId);
+      toast.success('PDF downloaded', { description: 'Ready to share with the candidate.' });
+    } catch (cause) {
+      handleValidationError(cause);
+    } finally {
+      setExporting(null);
+    }
+  };
+
+  const handleMarkdown = async () => {
+    if (!canExport) {
+      setOpen(false);
+      showUnavailableToast();
+      return;
+    }
+    setOpen(false);
+    setExporting('md');
+    try {
+      await copyRoadmapMarkdown(candidateName, interviewDate, roadmapData, interviewId);
+      setCopied(true);
+      toast.success('Markdown copied', { description: 'Paste it into an email.' });
+      setTimeout(() => setCopied(false), 2000);
+    } catch (cause) {
+      handleValidationError(cause);
+    } finally {
+      setExporting(null);
+    }
+  };
+
+  const handleJSON = () => {
+    if (!canExport) {
+      setOpen(false);
+      showUnavailableToast();
+      return;
+    }
+    setOpen(false);
+    try {
+      downloadRoadmapJSON(candidateName, interviewDate, roadmapData, interviewId);
+      toast.success('JSON downloaded', { description: 'Ready for integrations.' });
+    } catch (cause) {
+      handleValidationError(cause);
+    }
+  };
+
+  return (
+    <div className="relative">
+      <Button
+        variant="secondary"
+        size="sm"
+        onClick={() => {
+          if (!canExport) {
+            showUnavailableToast();
+            return;
+          }
+          setOpen((v) => !v);
+        }}
+        disabled={exporting !== null}
+        title={canExport ? 'Export the roadmap' : 'No roadmap to export'}
+        className="whitespace-nowrap"
+      >
+        {exporting ? (
+          <span className="animate-pulse">Exporting…</span>
+        ) : (
+          <>
+            <Download className="mr-1.5 h-3.5 w-3.5" />
+            Export Plan
+          </>
+        )}
+      </Button>
+
+      {open && canExport && (
+        <>
+          <div
+            className="fixed inset-0 z-30"
+            onClick={() => setOpen(false)}
+            aria-hidden="true"
+          />
+          <div className="absolute right-0 z-40 mt-2 w-56 overflow-hidden rounded-xl border border-line bg-surface-card shadow-lift">
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm transition-colors hover:bg-chip"
+              onClick={handlePDF}
+            >
+              <FileText className="h-4 w-4 text-accent-600" />
+              Download PDF
+            </button>
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm transition-colors hover:bg-chip"
+              onClick={handleMarkdown}
+            >
+              {copied ? (
+                <Check className="h-4 w-4 text-success-500" />
+              ) : (
+                <Copy className="h-4 w-4 text-accent-600" />
+              )}
+              Copy as Markdown
+            </button>
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm transition-colors hover:bg-chip"
+              onClick={handleJSON}
+            >
+              <FileJson className="h-4 w-4 text-accent-600" />
+              Download JSON
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
 // Main component
 // ============================================================
 export function GrowthPlanTab() {
   const { interviewId = '' } = useParams<{ interviewId: string }>();
-  const { status: scorecardStatus } = useScorecard();
+  const { status: scorecardStatus, scorecard } = useScorecard();
 
   const [roadmapData, setRoadmapData] = useState<RoadmapResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -360,7 +526,6 @@ export function GrowthPlanTab() {
 
   const handleRetry = () => setRefreshKey((k) => k + 1);
 
-  // Manual review case
   if (scorecardStatus === 'needs-review') {
     return (
       <>
@@ -370,7 +535,6 @@ export function GrowthPlanTab() {
     );
   }
 
-  // Loading
   if (loading) {
     return (
       <>
@@ -380,7 +544,6 @@ export function GrowthPlanTab() {
     );
   }
 
-  // Error
   if (error) {
     return (
       <>
@@ -390,7 +553,6 @@ export function GrowthPlanTab() {
     );
   }
 
-  // No gaps
   if (!roadmapData || roadmapData.gaps.length === 0) {
     return (
       <>
@@ -416,9 +578,12 @@ export function GrowthPlanTab() {
   }
 
   const { gaps, roadmap } = roadmapData;
-
-  // Compute total estimated time (assuming 1 week per gap)
   const totalWeeks = roadmap.length;
+
+  const candidateName =
+    scorecard?.status === 'scored' ? scorecard.candidateName : 'Candidate';
+  const interviewDate =
+    scorecard?.status === 'scored' ? scorecard.interviewDate : new Date().toISOString();
 
   return (
     <>
@@ -434,18 +599,25 @@ export function GrowthPlanTab() {
         animate="visible"
         className="space-y-8"
       >
-        {/* Header */}
         <motion.div variants={fadeUp}>
           <p className="text-xs font-semibold tracking-[0.18em] text-accent-700 uppercase dark:text-accent-300">
             Growth plan
           </p>
-          <div className="mt-1 flex flex-wrap items-baseline justify-between gap-3">
+          <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
             <h1 className="text-2xl font-semibold text-fg-strong sm:text-3xl">
               Upskilling Roadmap
             </h1>
-            <div className="flex items-center gap-2 rounded-full bg-chip px-3 py-1 text-xs font-medium text-fg-muted">
-              <Clock className="h-3.5 w-3.5" />
-              {totalWeeks} {totalWeeks === 1 ? 'week' : 'weeks'} plan
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2 rounded-full bg-chip px-3 py-1 text-xs font-medium text-fg-muted">
+                <Clock className="h-3.5 w-3.5" />
+                {totalWeeks} {totalWeeks === 1 ? 'week' : 'weeks'} plan
+              </div>
+              <ExportDropdown
+                candidateName={candidateName}
+                interviewDate={interviewDate}
+                roadmapData={roadmapData}
+                interviewId={interviewId}
+              />
             </div>
           </div>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-fg-muted">
@@ -454,10 +626,8 @@ export function GrowthPlanTab() {
           </p>
         </motion.div>
 
-        {/* Gaps summary */}
         <GapsSummary gaps={gaps} />
 
-        {/* Timeline */}
         <motion.div variants={fadeUp} className="relative space-y-6">
           <div className="mb-2 flex items-center gap-2">
             <h2 className="text-base font-semibold text-fg-strong">Week-by-week plan</h2>
@@ -466,7 +636,6 @@ export function GrowthPlanTab() {
             </span>
           </div>
 
-          {/* Vertical line */}
           <div
             className="absolute left-6 top-16 bottom-0 w-0.5 bg-gradient-to-b from-accent-500/40 via-line-strong/40 to-transparent sm:left-7"
             aria-hidden="true"
@@ -487,7 +656,6 @@ export function GrowthPlanTab() {
           })}
         </motion.div>
 
-        {/* Footer */}
         <motion.div variants={fadeUp}>
           <Card className="overflow-hidden bg-gradient-to-br from-accent-50 to-surface-card p-6 dark:from-accent-500/5 dark:to-surface-card">
             <div className="flex items-start gap-4">
@@ -508,8 +676,10 @@ export function GrowthPlanTab() {
           </Card>
         </motion.div>
 
-        {/* Navigation */}
-        <motion.div variants={fadeUp} className="flex flex-wrap items-center justify-between gap-3 pt-2">
+        <motion.div
+          variants={fadeUp}
+          className="flex flex-wrap items-center justify-between gap-3 pt-2"
+        >
           <Link
             to={`/dashboard/${interviewId}/overview`}
             className="text-sm font-semibold text-accent-700 dark:text-accent-300 hover:underline"

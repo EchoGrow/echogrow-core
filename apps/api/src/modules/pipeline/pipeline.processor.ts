@@ -36,6 +36,20 @@ export class PipelineProcessor extends WorkerHost {
     );
 
     try {
+      const preCheck = await this.prisma.interviewSession.findUnique({
+        where: { id: interviewId },
+        select: { status: true },
+      });
+
+      if (!preCheck) throw new Error('Interview session not found');
+
+      if (preCheck.status === 'COMPLETED' && !force) {
+        this.logger.log(
+          `[Pipeline] Session ${interviewId} already COMPLETED. Skipping (use force=true to rerun).`,
+        );
+        return { success: true, status: 'completed', skipped: true };
+      }
+
       await this.evaluationService.updateStatus(interviewId, 'PROCESSING');
 
       const session = await this.prisma.interviewSession.findUnique({
@@ -70,7 +84,7 @@ export class PipelineProcessor extends WorkerHost {
         this.logger.log(`[Pipeline] Force flag set. Skipping confidence check.`);
       }
 
-      // 1. التقييم
+      // 1. Scoring
       const evaluation = await this.evaluationService.evaluate(
         session.transcript,
         session.resume,
@@ -86,7 +100,7 @@ export class PipelineProcessor extends WorkerHost {
       });
       this.logger.log(`[Pipeline] Scoring done for ${interviewId}`);
 
-      // 2. كشف التناقضات
+      // 2. Discrepancies
       const discrepancies = await this.discrepancyService.detect(
         session.resume,
         session.transcript,
@@ -102,7 +116,7 @@ export class PipelineProcessor extends WorkerHost {
       });
       this.logger.log(`[Pipeline] Verification done for ${interviewId}`);
 
-      // 3. توليد خطة النمو (Roadmap)
+      // 3. Roadmap
       const roadmapResult = await this.roadmapService.generateAndSave(scorecardId);
 
       if (roadmapResult) {
@@ -121,9 +135,32 @@ export class PipelineProcessor extends WorkerHost {
       });
       this.logger.log(`[Pipeline] Planning done for ${interviewId}`);
 
-      // 4. تحديث الحالة النهائية
+      // 4. Final status
       await this.evaluationService.updateStatus(interviewId, 'COMPLETED');
       this.logger.log(`[Pipeline] Completed for session ${interviewId}`);
+
+      // 5. Time Saved snapshot (computed once, persisted to DB)
+      try {
+        const scorecard = await this.prisma.scorecard.findUnique({
+          where: { interviewId },
+          include: { dimensions: true, discrepancies: true },
+        });
+
+        if (scorecard) {
+          const weakDimensionsCount = scorecard.dimensions.filter((d) => d.score <= 2).length;
+          await this.evaluationService.saveTimeSaved(interviewId, {
+            transcript: session.transcript,
+            resume: session.resume,
+            discrepanciesCount: scorecard.discrepancies.length,
+            weakDimensionsCount,
+            createdAt: session.createdAt,
+          });
+        }
+      } catch (cause: any) {
+        this.logger.warn(
+          `[Pipeline] Failed to save time-saved snapshot for ${interviewId}: ${cause.message}`,
+        );
+      }
 
       return {
         success: true,

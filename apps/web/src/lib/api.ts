@@ -57,6 +57,13 @@ export interface ProcessingResponse {
   }
 }
 
+export interface TimeSavedBreakdown {
+  manualMinutes: number;
+  echoGrowSeconds: number;
+  savedMinutes: number;
+  savedSeconds: number;
+}
+
 export interface ScoredResponse {
   status: 'scored'
   interviewId: string
@@ -66,6 +73,7 @@ export interface ScoredResponse {
   overallConfidence: number
   pendingDiscrepancies: number
   skillGaps: number
+  timeSaved?: TimeSavedBreakdown
 }
 
 export interface FailedResponse {
@@ -384,5 +392,43 @@ export async function getRoadmap(interviewId: string): Promise<RoadmapResponse> 
     throw new ApiError('Could not reach the server. Check your connection and try again.');
   } finally {
     window.clearTimeout(timeout);
+  }
+}
+
+/**
+ * Validates a roadmap response before it is used for export.
+ * Throws a descriptive ApiError if the payload is missing or malformed.
+ */
+export function validateRoadmapForExport(data: RoadmapResponse | null | undefined): asserts data is RoadmapResponse {
+  if (!data) {
+    throw new ApiError(
+      'No roadmap data available. Please wait for the analysis to finish, then try again.',
+    );
+  }
+
+  if (!Array.isArray(data.gaps) || !Array.isArray(data.roadmap)) {
+    throw new ApiError(
+      'The roadmap response is malformed. Please reload the page and try again.',
+    );
+  }
+
+  if (data.gaps.length === 0 && data.roadmap.length === 0) {
+    throw new ApiError(
+      'There is nothing to export yet. This candidate has no skill gaps — the roadmap is empty.',
+    );
+  }
+
+  if (data.roadmap.length !== data.gaps.length) {
+    throw new ApiError(
+      'The roadmap is inconsistent (weeks count does not match gaps). Please reload and try again.',
+    );
+  }
+
+  for (const item of data.roadmap) {
+    if (!item.week || !item.task || !item.skillName) {
+      throw new ApiError(
+        'The roadmap contains incomplete items. Please reload and try again.',
+      );
+    }
   }
 }

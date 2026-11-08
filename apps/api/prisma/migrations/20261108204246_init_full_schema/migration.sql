@@ -37,6 +37,10 @@ CREATE TABLE "interview_sessions" (
     "is_scored" BOOLEAN NOT NULL DEFAULT false,
     "is_verified" BOOLEAN NOT NULL DEFAULT false,
     "is_planned" BOOLEAN NOT NULL DEFAULT false,
+    "manual_review_minutes" DOUBLE PRECISION,
+    "echogrow_seconds" INTEGER,
+    "saved_minutes" DOUBLE PRECISION,
+    "completed_at" TIMESTAMP(3),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
 
