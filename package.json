@@ -1,7 +1,10 @@
 {
   "name": "echogrow",
   "private": true,
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "setup": "npm install && npm run build:shared && npm run prisma:generate",
     "build:shared": "npm run build -w @echogrow/shared",
