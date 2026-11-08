@@ -30,22 +30,41 @@ export class DiscrepancyService {
     return result.discrepancies;
   }
 
+  /**
+   * Idempotent: deletes any existing PENDING discrepancies for this scorecard
+   * before creating new ones. Keeps CONFIRMED/DISMISSED ones untouched.
+   */
   async saveDiscrepancies(
     scorecardId: string,
     discrepancies: any[],
   ): Promise<void> {
-    for (const d of discrepancies) {
-      await this.prisma.discrepancy.create({
-        data: {
-          scorecardId,
-          claim: d.field,
-          cvQuote: d.cvQuote,
-          interviewQuote: d.interviewQuote,
-          confidence: d.confidence,
-          status: 'PENDING',
-        },
-      });
+    const deleted = await this.prisma.discrepancy.deleteMany({
+      where: { scorecardId, status: 'PENDING' },
+    });
+
+    if (deleted.count > 0) {
+      this.logger.log(
+        `[Discrepancy] Removed ${deleted.count} stale PENDING discrepancies for scorecard ${scorecardId}`,
+      );
     }
+
+    if (discrepancies.length === 0) {
+      this.logger.log(`[Discrepancy] No new discrepancies to save.`);
+      return;
+    }
+
+    await this.prisma.discrepancy.createMany({
+      data: discrepancies.map((d) => ({
+        scorecardId,
+        claim: d.field,
+        cvQuote: d.cvQuote,
+        interviewQuote: d.interviewQuote,
+        confidence: d.confidence,
+        status: 'PENDING',
+      })),
+    });
+
+    this.logger.log(`[Discrepancy] Saved ${discrepancies.length} new discrepancies.`);
   }
 
   async updateStatus(id: string, body: DiscrepancyStatusUpdate) {

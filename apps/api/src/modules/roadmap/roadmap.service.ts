@@ -12,7 +12,6 @@ import { RoadmapGenerationSchema, RoadmapGeneration, whitelist } from '@echogrow
 export class RoadmapService {
   private readonly logger = new Logger(RoadmapService.name);
 
-  // حجم المجموعة: كم اقتباساً نرسل في كل استدعاء LLM
   private readonly BATCH_SIZE = 2;
 
   constructor(
@@ -21,6 +20,24 @@ export class RoadmapService {
   ) {}
 
   async generateAndSave(scorecardId: string): Promise<RoadmapGeneration | null> {
+    // Idempotency: delete any existing roadmap (and its items cascade) and skill gaps
+    const existingRoadmap = await this.prisma.roadmap.findUnique({
+      where: { scorecardId },
+      select: { id: true },
+    });
+
+    if (existingRoadmap) {
+      await this.prisma.roadmap.delete({ where: { id: existingRoadmap.id } });
+      this.logger.log(`[Roadmap] Deleted existing roadmap for scorecard ${scorecardId}`);
+    }
+
+    const deletedGaps = await this.prisma.skillGap.deleteMany({
+      where: { dimension: { scorecardId } },
+    });
+    if (deletedGaps.count > 0) {
+      this.logger.log(`[Roadmap] Deleted ${deletedGaps.count} existing skill gaps`);
+    }
+
     // 1. جلب جميع الأبعاد
     const dimensions = await this.prisma.dimension.findMany({
       where: { scorecardId },
@@ -38,7 +55,7 @@ export class RoadmapService {
       return null;
     }
 
-    // 2. جلب الـ transcript الكامل (من الـ interview المرتبط بالـ scorecard)
+    // 2. جلب الـ transcript الكامل
     const scorecard = await this.prisma.scorecard.findUnique({
       where: { id: scorecardId },
       include: { interview: { select: { transcript: true } } },
@@ -50,9 +67,11 @@ export class RoadmapService {
     }
 
     const transcript = scorecard.interview.transcript;
-    this.logger.log(`Analyzing ${dimensions.length} dimensions for skill gaps (multi-pass, transcript=${transcript.length} chars)...`);
+    this.logger.log(
+      `Analyzing ${dimensions.length} dimensions for skill gaps (multi-pass, transcript=${transcript.length} chars)...`,
+    );
 
-    // 3. تجهيز قائمة الأدلة (مع score + reason)
+    // 3. تجهيز الأدلة
     const evidenceList = dimensions.map((d) => ({
       dimension: this.mapDimensionType(d.dimensionType),
       quote: (d.evidenceQuote as any)?.quote || 'No evidence provided.',
@@ -60,7 +79,7 @@ export class RoadmapService {
       reason: d.reason || undefined,
     }));
 
-    // 4. Multi-Pass Extraction: تقسيم الأدلة إلى مجموعات
+    // 4. Multi-Pass Extraction
     const allSkills: string[] = [];
     const totalBatches = Math.ceil(evidenceList.length / this.BATCH_SIZE);
 
@@ -86,7 +105,7 @@ export class RoadmapService {
       }
     }
 
-    // 5. دمج الفجوات وإزالة التكرار (case-insensitive)
+    // 5. Dedupe
     const uniqueSkillsMap = new Map<string, string>();
     for (const skill of allSkills) {
       const normalized = skill.trim().toLowerCase();
@@ -105,7 +124,7 @@ export class RoadmapService {
       `Total unique skills extracted: ${uniqueSkills.length}: [${uniqueSkills.join(', ')}]`,
     );
 
-    // 6. توليد Roadmap من الفجوات المدمجة
+    // 6. توليد Roadmap
     const evidenceContext = evidenceList
       .map((e) => `- ${e.dimension} (Score: ${e.score}/5): "${e.quote}"`)
       .join('\n');
@@ -163,13 +182,9 @@ export class RoadmapService {
     const roadmap = await this.prisma.roadmap.create({
       data: {
         scorecardId,
-        items: {
-          create: itemsToCreate,
-        },
+        items: { create: itemsToCreate },
       },
-      include: {
-        items: true,
-      },
+      include: { items: true },
     });
 
     this.logger.log(`Roadmap saved with ${roadmap.items.length} items.`);

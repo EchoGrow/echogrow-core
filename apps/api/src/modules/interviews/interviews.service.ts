@@ -70,10 +70,10 @@ export class InterviewsService {
     await this.evaluationQueue.add(
       'evaluate',
       { interviewId: session.id },
-      { 
-        attempts: 1, // <--- محاولة واحدة فقط (الـ LLM يتولى إعادة المحاولة الداخلية)
-        backoff: { type: 'exponential', delay: 2000 }, 
-        removeOnComplete: true 
+      {
+        attempts: 1,
+        backoff: { type: 'exponential', delay: 2000 },
+        removeOnComplete: true,
       },
     );
 
@@ -88,11 +88,8 @@ export class InterviewsService {
         scorecard: {
           include: {
             dimensions: true,
-            roadmap: {
-              include: {
-                items: true,
-              },
-            },
+            discrepancies: { select: { id: true, status: true } },
+            roadmap: { include: { items: true } },
           },
         },
       },
@@ -125,7 +122,6 @@ export class InterviewsService {
       };
     }
 
-    // حالة الفشل
     if (session.status === 'FAILED') {
       return {
         status: 'failed',
@@ -135,7 +131,6 @@ export class InterviewsService {
       };
     }
 
-    // حالة المعالجة
     if (session.status !== 'COMPLETED' || !session.scorecard) {
       return {
         status: 'processing',
@@ -149,21 +144,58 @@ export class InterviewsService {
       };
     }
 
-    // حالة النجاح
     const pendingDiscrepancies = await this.prisma.discrepancy.count({
-      where: {
-        scorecardId: session.scorecard.id,
-        status: 'PENDING',
-      },
+      where: { scorecardId: session.scorecard.id, status: 'PENDING' },
     });
 
     const skillGaps = session.scorecard.roadmap
       ? await this.prisma.roadmapItem.count({
-        where: {
-          roadmapId: session.scorecard.roadmap.id,
-        },
-      })
+          where: { roadmapId: session.scorecard.roadmap.id },
+        })
       : 0;
+
+    const totalDiscrepancies = session.scorecard.discrepancies.length;
+    const weakDimensionsCount = session.scorecard.dimensions.filter((d) => d.score <= 2).length;
+
+    // ============================================================
+    // Time Saved — read from DB (snapshot), fallback to on-the-fly
+    // ============================================================
+    let timeSaved:
+      | {
+          manualMinutes: number;
+          echoGrowSeconds: number;
+          savedMinutes: number;
+          savedSeconds: number;
+        }
+      | undefined;
+
+    if (
+      session.manualReviewMinutes !== null &&
+      session.echoGrowSeconds !== null &&
+      session.savedMinutes !== null
+    ) {
+      const savedSeconds = Math.max(
+        0,
+        Math.round(session.manualReviewMinutes * 60 - session.echoGrowSeconds),
+      );
+      timeSaved = {
+        manualMinutes: session.manualReviewMinutes,
+        echoGrowSeconds: session.echoGrowSeconds,
+        savedMinutes: session.savedMinutes,
+        savedSeconds,
+      };
+    } else if (session.status === 'COMPLETED') {
+      timeSaved = this.computeTimeSavedFallback(
+        {
+          createdAt: session.createdAt,
+          updatedAt: session.updatedAt,
+          transcript: session.transcript,
+          resume: session.resume,
+        },
+        totalDiscrepancies,
+        weakDimensionsCount,
+      );
+    }
 
     const response = {
       status: 'scored',
@@ -172,7 +204,6 @@ export class InterviewsService {
       interviewDate: session.createdAt.toISOString(),
       dimensions: session.scorecard.dimensions.map((dimension) => {
         const evidenceQuote = dimension.evidenceQuote as any;
-
         return {
           name: DIMENSION_NAME_MAP[dimension.dimensionType],
           score: dimension.score,
@@ -184,6 +215,7 @@ export class InterviewsService {
       overallConfidence: session.scorecard.confidence ?? 0,
       pendingDiscrepancies,
       skillGaps,
+      timeSaved,
     };
 
     return ScorecardSchema.parse(response);
@@ -204,7 +236,7 @@ export class InterviewsService {
 
     await this.prisma.interviewSession.update({
       where: { id: interviewId },
-      data: { 
+      data: {
         status: 'QUEUED',
         isScored: false,
         isVerified: false,
@@ -215,10 +247,10 @@ export class InterviewsService {
     await this.evaluationQueue.add(
       'evaluate',
       { interviewId, force: true },
-      { 
+      {
         attempts: 1,
-        backoff: { type: 'exponential', delay: 2000 }, 
-        removeOnComplete: true 
+        backoff: { type: 'exponential', delay: 2000 },
+        removeOnComplete: true,
       },
     );
 
@@ -252,9 +284,7 @@ export class InterviewsService {
       include: {
         scorecard: {
           include: {
-            discrepancies: {
-              orderBy: { createdAt: 'asc' },
-            },
+            discrepancies: { orderBy: { createdAt: 'asc' } },
           },
         },
       },
@@ -273,7 +303,10 @@ export class InterviewsService {
         cvQuote: discrepancy.cvQuote ?? undefined,
         interviewQuote: discrepancy.interviewQuote ?? undefined,
         confidence: discrepancy.confidence ?? 0,
-        status: DISCREPANCY_STATUS_MAP[discrepancy.status as keyof typeof DISCREPANCY_STATUS_MAP] || 'pending',
+        status:
+          DISCREPANCY_STATUS_MAP[
+            discrepancy.status as keyof typeof DISCREPANCY_STATUS_MAP
+          ] || 'pending',
         action: 'flag_for_human_review' as const,
       })),
     };
@@ -287,20 +320,12 @@ export class InterviewsService {
       include: {
         scorecard: {
           include: {
-            dimensions: {
-              include: {
-                skillGaps: true,
-              },
-            },
+            dimensions: { include: { skillGaps: true } },
             roadmap: {
               include: {
                 items: {
-                  include: {
-                    skillGap: true,
-                  },
-                  orderBy: {
-                    week: 'asc',
-                  },
+                  include: { skillGap: true },
+                  orderBy: { week: 'asc' },
                 },
               },
             },
@@ -318,18 +343,14 @@ export class InterviewsService {
     }
 
     const gaps = session.scorecard.dimensions.flatMap((dimension) =>
-        dimension.skillGaps.map((gap) => ({
-          skillName: gap.skillName,
-          priority: gap.priority,
-        })),
+      dimension.skillGaps.map((gap) => ({
+        skillName: gap.skillName,
+        priority: gap.priority,
+      })),
     );
 
-    // No skill gaps were identified.
     if (gaps.length === 0) {
-      return RoadmapResponseSchema.parse({
-        gaps: [],
-        roadmap: [],
-      });
+      return RoadmapResponseSchema.parse({ gaps: [], roadmap: [] });
     }
 
     const savedRoadmap = session.scorecard.roadmap;
@@ -349,5 +370,43 @@ export class InterviewsService {
     };
 
     return RoadmapResponseSchema.parse(response);
+  }
+
+  // ============================================================
+  // Fallback for old sessions (pre-snapshot). Computed on-the-fly.
+  // ============================================================
+  private computeTimeSavedFallback(
+    session: { createdAt: Date; updatedAt: Date; transcript: string; resume: string },
+    discrepanciesCount: number,
+    weakDimensionsCount: number,
+  ) {
+    const C = {
+      BASE_MINUTES: 5,
+      TRANSCRIPT_WPM: 150,
+      CV_WPM: 200,
+      MINUTES_PER_DISCREPANCY: 3,
+      MINUTES_PER_WEAK_DIMENSION: 4,
+      ECHOGROW_CAP_SECONDS: 180,
+    };
+
+    const countWords = (text: string) => text.trim().split(/\s+/).filter(Boolean).length;
+
+    const manualMinutes =
+      C.BASE_MINUTES +
+      countWords(session.transcript) / C.TRANSCRIPT_WPM +
+      countWords(session.resume) / C.CV_WPM +
+      discrepanciesCount * C.MINUTES_PER_DISCREPANCY +
+      weakDimensionsCount * C.MINUTES_PER_WEAK_DIMENSION;
+
+    const rawSeconds = Math.max(0, (session.updatedAt.getTime() - session.createdAt.getTime()) / 1000);
+    const echoGrowSeconds = Math.min(rawSeconds, C.ECHOGROW_CAP_SECONDS);
+    const savedSeconds = Math.max(0, manualMinutes * 60 - echoGrowSeconds);
+
+    return {
+      manualMinutes: Math.round(manualMinutes * 10) / 10,
+      echoGrowSeconds: Math.round(echoGrowSeconds),
+      savedMinutes: savedSeconds < 60 ? 0 : Math.round((savedSeconds / 60) * 10) / 10,
+      savedSeconds: Math.round(savedSeconds),
+    };
   }
 }
