@@ -8,7 +8,7 @@ import { fadeUp } from '../../lib/animations'
 
 const STATUS_STYLES: Record<
   DiscrepancyStatus,
-  { label: string; badge: string; dot: string; border: string; icon: any }
+  { label: string; badge: string; dot: string }
 > = {
   pending: {
     label: 'Pending review',

@@ -1,5 +1,7 @@
 const API_BASE_URL = (import.meta.env.VITE_API_URL ?? '/api').replace(/\/+$/, '')
 
+const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true'
+
 const REQUEST_TIMEOUT_MS = 30_000
 
 export interface CreateInterviewRequest {
@@ -34,7 +36,7 @@ export interface NeedsReviewResponse {
   candidateName: string
   transcript: string
   resume: string
-  structuredTranscript?: any
+  structuredTranscript?: unknown
   confidence: number
   message: string
 }
@@ -182,7 +184,110 @@ async function readErrorMessage(response: Response): Promise<string> {
   return fallbackMessage(response.status)
 }
 
+// ============================================================
+// Mock data (dev only, VITE_USE_MOCK=true)
+// ============================================================
+
+const MOCK_DIMENSIONS: ScorecardDimension[] = [
+  { name: 'Technical Depth', score: 2, reason: 'Applied indexes correctly but could not explain B-tree internals.', evidenceQuote: 'I know indexes speed up lookups, but I have not gone deep into B-trees.' },
+  { name: 'Communication Clarity', score: 4, reason: 'Answers followed situation → action → measurable result.', evidenceQuote: 'I profiled it with EXPLAIN ANALYZE and added a composite index; latency dropped to ~180 ms.' },
+  { name: 'Domain Experience', score: 3, reason: 'Solid backend background; payments exposure limited.', evidenceQuote: 'Limited. Most of my work was on internal tools and a marketplace MVP.' },
+  { name: 'Problem Solving', score: 4, reason: 'Splits delivery into vertical slices and debugs methodically.', evidenceQuote: 'I broke the work into vertical slices and reviewed every PR myself.' },
+]
+
+const MOCK_DISCREPANCIES: DiscrepancyRecord[] = [
+  {
+    id: 'mock-disc-1',
+    field: 'Years of experience',
+    cvSays: '5 years of backend experience',
+    interviewSays: '3 years of backend experience',
+    cvQuote: '5+ years building backend services in Node.js.',
+    interviewQuote: 'I have been doing backend work for about 3 years now.',
+    confidence: 0.86,
+    action: 'flag_for_human_review',
+    status: 'pending',
+  },
+  {
+    id: 'mock-disc-2',
+    field: 'Leadership',
+    cvSays: 'Led a team of 6 engineers',
+    interviewSays: 'Contributed to a team of 6',
+    cvQuote: 'Led a team of 6 engineers delivering the checkout service.',
+    interviewQuote: 'I was part of the team; we were 6 people.',
+    confidence: 0.71,
+    action: 'flag_for_human_review',
+    status: 'pending',
+  },
+]
+
+const MOCK_ROADMAP: RoadmapResponse = {
+  gaps: [
+    { skillName: 'System Design', priority: 'HIGH' },
+    { skillName: 'Database Internals', priority: 'MEDIUM' },
+  ],
+  roadmap: [
+    { week: 1, task: 'Study B-tree and index internals', resourceUrl: 'https://example.com/db-internals', skillName: 'Database Internals' },
+    { week: 2, task: 'Practice system design interviews', resourceUrl: 'https://example.com/sysdesign', skillName: 'System Design' },
+    { week: 3, task: 'Build a small distributed cache', resourceUrl: null, skillName: 'System Design' },
+  ],
+}
+
+const MOCK_META_PREFIX = 'echogrow:mock-interview:'
+
+interface MockInterviewMeta { candidateName: string; createdAt: string }
+
+function readMockMeta(interviewId: string): MockInterviewMeta | null {
+  try {
+    const raw = sessionStorage.getItem(`${MOCK_META_PREFIX}${interviewId}`)
+    return raw ? (JSON.parse(raw) as MockInterviewMeta) : null
+  } catch {
+    return null
+  }
+}
+
+async function mockCreateInterview(input: CreateInterviewRequest): Promise<CreateInterviewResponse> {
+  await new Promise((resolve) => setTimeout(resolve, 900))
+  const interviewId = crypto.randomUUID()
+  const candidateName = /^\s*name\s*:\s*(.+)$/im.exec(input.cv)?.[1]?.trim() || 'Sample candidate'
+  try {
+    sessionStorage.setItem(`${MOCK_META_PREFIX}${interviewId}`, JSON.stringify({ candidateName, createdAt: new Date().toISOString() }))
+  } catch {
+    /* ignore */
+  }
+  return { interviewId, status: 'queued' }
+}
+
+async function mockGetScorecard(interviewId: string): Promise<ScorecardResponse> {
+  await new Promise((resolve) => setTimeout(resolve, 700))
+  const meta = readMockMeta(interviewId)
+  return {
+    status: 'scored',
+    interviewId,
+    candidateName: meta?.candidateName ?? 'Ahmed Al-Mansour',
+    interviewDate: meta?.createdAt ?? new Date().toISOString(),
+    dimensions: MOCK_DIMENSIONS,
+    overallConfidence: 0.82,
+    pendingDiscrepancies: MOCK_DISCREPANCIES.filter((d) => d.status === 'pending').length,
+    skillGaps: MOCK_ROADMAP.gaps.length,
+  } as ScorecardResponse
+}
+
+async function mockGetDiscrepancies(_: string): Promise<DiscrepancyResponse> {
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  return { discrepancies: MOCK_DISCREPANCIES }
+}
+
+async function mockGetRoadmap(_: string): Promise<RoadmapResponse> {
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  return MOCK_ROADMAP
+}
+
+// ============================================================
+// Real API
+// ============================================================
+
 export async function createInterview(input: CreateInterviewRequest): Promise<CreateInterviewResponse> {
+  if (USE_MOCK) return mockCreateInterview(input)
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
 
@@ -217,6 +322,7 @@ export async function createInterview(input: CreateInterviewRequest): Promise<Cr
 }
 
 export async function getScorecard(interviewId: string): Promise<ScorecardResponse> {
+  if (USE_MOCK) return mockGetScorecard(interviewId)
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
 
@@ -249,6 +355,7 @@ export async function getScorecard(interviewId: string): Promise<ScorecardRespon
 }
 
 export async function getDiscrepancies(interviewId: string): Promise<DiscrepancyResponse> {
+  if (USE_MOCK) return mockGetDiscrepancies(interviewId)
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
 
@@ -370,6 +477,7 @@ export async function rejectInterview(interviewId: string): Promise<{ interviewI
 // Roadmap API
 // ============================================================
 export async function getRoadmap(interviewId: string): Promise<RoadmapResponse> {
+  if (USE_MOCK) return mockGetRoadmap(interviewId)
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
