@@ -8,8 +8,9 @@ import { InterviewsModule } from './modules/interviews/interviews.module';
 import { LlmModule } from './modules/llm/llm.module';
 import { EvaluationModule } from './modules/evaluation/evaluation.module';
 import { DiscrepancyModule } from './modules/discrepancy/discrepancy.module';
+import { RoadmapModule } from './modules/roadmap/roadmap.module';
+import { SpkModule } from './modules/spk/spk.module';
 import { PipelineModule } from './modules/pipeline/pipeline.module';
-import { RoadmapModule } from './modules/roadmap/roadmap.module'; // جديد
 
 @Module({
   imports: [
@@ -29,7 +30,8 @@ import { RoadmapModule } from './modules/roadmap/roadmap.module'; // جديد
     LlmModule,
     EvaluationModule,
     DiscrepancyModule,
-    RoadmapModule, // جديد
+    RoadmapModule,
+    SpkModule,
     PipelineModule,
   ],
   controllers: [AppController],

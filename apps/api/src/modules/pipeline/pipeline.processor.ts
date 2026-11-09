@@ -5,6 +5,7 @@ import { EVALUATION_QUEUE_NAME } from '../evaluation/evaluation.constants';
 import { EvaluationService } from '../evaluation/evaluation.service';
 import { DiscrepancyService } from '../discrepancy/discrepancy.service';
 import { RoadmapService } from '../roadmap/roadmap.service';
+import { SpkService } from '../spk/spk.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { TranscriptParserService } from '../evaluation/transcript-parser.service';
 
@@ -21,6 +22,7 @@ export class PipelineProcessor extends WorkerHost {
     private readonly evaluationService: EvaluationService,
     private readonly discrepancyService: DiscrepancyService,
     private readonly roadmapService: RoadmapService,
+    private readonly spkService: SpkService,
     private readonly prisma: PrismaService,
     private readonly parser: TranscriptParserService,
   ) {
@@ -160,6 +162,17 @@ export class PipelineProcessor extends WorkerHost {
         this.logger.warn(
           `[Pipeline] Failed to save time-saved snapshot for ${interviewId}: ${cause.message}`,
         );
+      }
+
+      // 6. Build SPK profile (LLM metadata + verified skills)
+      try {
+        await this.spkService.buildSpkProfile(interviewId);
+      } catch (cause: any) {
+        this.logger.error(
+          `[Pipeline] SPK profile build failed for ${interviewId}: ${cause.message}`,
+          cause.stack,
+        );
+        // Non-fatal: pipeline is still COMPLETED, but SPK export will be unavailable.
       }
 
       return {

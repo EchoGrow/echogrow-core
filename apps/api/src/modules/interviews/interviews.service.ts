@@ -31,9 +31,7 @@ const DISCREPANCY_STATUS_MAP = {
   DISMISSED: 'dismissed',
 } as const;
 
-// Per-file size cap enforced inside the service so we can reject files
-// individually instead of failing the entire request.
-const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2 MB
+const MAX_FILE_BYTES = 2 * 1024 * 1024;
 
 @Injectable()
 export class InterviewsService {
@@ -62,10 +60,6 @@ export class InterviewsService {
     return { interviewId, status: 'queued' };
   }
 
-  /**
-   * Shared helper used by both single upload and bulk upload.
-   * Creates candidate (if needed), creates session, enqueues the job.
-   */
   private async createInterviewAndEnqueue(
     candidateName: string,
     candidateEmail: string,
@@ -111,16 +105,6 @@ export class InterviewsService {
     return session.id;
   }
 
-  /**
-   * Bulk upload: accepts N files + a metadata JSON array describing
-   * which transcript/resume belongs to which candidate.
-   *
-   * - Files larger than MAX_FILE_BYTES are rejected individually (not the whole request).
-   * - Empty files are rejected individually.
-   * - Missing files or short content fail only that candidate.
-   * - Never throws after metadata validation succeeds; per-candidate errors
-   *   are returned in `results`, file-level rejections in `rejectedFiles`.
-   */
   async bulkUpload(files: Express.Multer.File[], metadataRaw: unknown) {
     const parsed = BulkUploadMetadataSchema.safeParse(metadataRaw);
     if (!parsed.success) {
@@ -134,7 +118,6 @@ export class InterviewsService {
 
     const metadata = parsed.data;
 
-    // ── 1. File-level validation (individually rejectable) ──
     const rejectedFiles: { filename: string; reason: string; sizeBytes: number }[] = [];
     const acceptedFiles: Express.Multer.File[] = [];
 
@@ -157,23 +140,19 @@ export class InterviewsService {
           reason: `File is too large (${sizeMb} MB). Maximum is ${limitMb} MB per file.`,
           sizeBytes: file.size,
         });
-        this.logger.warn(
-          `[Bulk] Rejected oversized file: ${file.originalname} (${sizeMb} MB)`,
-        );
+        this.logger.warn(`[Bulk] Rejected oversized file: ${file.originalname} (${sizeMb} MB)`);
         continue;
       }
 
       acceptedFiles.push(file);
     }
 
-    // ── 2. Build lookup map (case-insensitive) ──
     const fileMap = new Map<string, Express.Multer.File>();
     for (const file of acceptedFiles) {
       fileMap.set(file.originalname, file);
       fileMap.set(file.originalname.toLowerCase(), file);
     }
 
-    // ── 3. Process each candidate ──
     const results: BulkUploadResult[] = [];
 
     for (const candidate of metadata) {
@@ -251,9 +230,7 @@ export class InterviewsService {
           status: 'error',
           error: cause instanceof Error ? cause.message : 'Unknown error',
         });
-        this.logger.warn(
-          `[Bulk] Failed for ${candidate.candidateEmail}: ${cause.message}`,
-        );
+        this.logger.warn(`[Bulk] Failed for ${candidate.candidateEmail}: ${cause.message}`);
       }
     }
 
@@ -344,13 +321,14 @@ export class InterviewsService {
       where: { scorecardId: session.scorecard.id, status: 'PENDING' },
     });
 
+    const totalDiscrepancies = session.scorecard.discrepancies.length;
+
     const skillGaps = session.scorecard.roadmap
       ? await this.prisma.roadmapItem.count({
           where: { roadmapId: session.scorecard.roadmap.id },
         })
       : 0;
 
-    const totalDiscrepancies = session.scorecard.discrepancies.length;
     const weakDimensionsCount = session.scorecard.dimensions.filter((d) => d.score <= 2).length;
 
     let timeSaved:
@@ -407,6 +385,7 @@ export class InterviewsService {
       }),
       overallConfidence: session.scorecard.confidence ?? 0,
       pendingDiscrepancies,
+      totalDiscrepancies,
       skillGaps,
       timeSaved,
     };
