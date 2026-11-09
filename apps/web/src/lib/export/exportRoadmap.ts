@@ -34,7 +34,7 @@ export async function downloadRoadmapPDF(
         interviewDate,
         data,
         sessionId,
-      }),
+      }) as any, // eslint-disable-line @typescript-eslint/no-explicit-any
     ).toBlob();
 
     const url = URL.createObjectURL(blob);
