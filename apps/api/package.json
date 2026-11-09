@@ -17,10 +17,12 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
-    "seed": "ts-node prisma/seed.ts"
+    "test:e2e": "vitest run tests/e2e",
+    "test:e2e:watch": "vitest tests/e2e",
+    "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
-    "@echogrow/shared": "file:../../packages/shared",
+    "@echogrow/shared": "*",
     "@google/genai": "^2.32.0",
     "@nestjs/bullmq": "^12.0.0",
     "@nestjs/common": "^12.0.1",
@@ -44,6 +46,7 @@
     "@nestjs/testing": "^12.0.1",
     "@swc/core": "^1.16.21",
     "@types/express": "^5.0.0",
+    "@types/multer": "^2.3.0",
     "@types/node": "^24.0.0",
     "@types/pg": "^8.23.1",
     "@types/supertest": "^7.0.0",
@@ -56,6 +59,7 @@
     "ts-loader": "^9.5.2",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
+    "tsx": "^4.23.15",
     "typescript": "^6.0.2",
     "unplugin-swc": "^2.0.0",
     "vite-tsconfig-paths": "^6.1.1",

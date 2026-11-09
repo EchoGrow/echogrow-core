@@ -6,8 +6,16 @@
     "packages/*"
   ],
   "scripts": {
-    "dev:web": "npm run dev --workspace=apps/web",
-    "dev:api": "npm run start:dev --workspace=apps/api",
-    "seed": "npm run seed --workspace=apps/api"
+    "setup": "npm install && npm run build:shared && npm run prisma:generate",
+    "build:shared": "npm run build -w @echogrow/shared",
+    "prisma:generate": "npm exec -w api -- prisma generate",
+    "dev:shared": "npm run dev -w @echogrow/shared",
+    "dev:api": "npm run start:dev -w api",
+    "dev:web": "npm run dev -w web",
+    "build": "npm run build:shared && npm run build -w api && npm run build -w web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0",
+    "rimraf": "^6.0.0"
   }
 }

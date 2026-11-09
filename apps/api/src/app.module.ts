@@ -3,8 +3,13 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { TestModule } from './queues/test/test.module';
-import { LlmModule } from './llm/llm.module';
+import { PrismaModule } from './modules/prisma/prisma.module';
+import { InterviewsModule } from './modules/interviews/interviews.module';
+import { LlmModule } from './modules/llm/llm.module';
+import { EvaluationModule } from './modules/evaluation/evaluation.module';
+import { DiscrepancyModule } from './modules/discrepancy/discrepancy.module';
+import { PipelineModule } from './modules/pipeline/pipeline.module';
+import { RoadmapModule } from './modules/roadmap/roadmap.module'; // جديد
 
 @Module({
   imports: [
@@ -18,8 +23,14 @@ import { LlmModule } from './llm/llm.module';
         },
       }),
     }),
-    TestModule,
+    BullModule.registerQueue({ name: 'evaluation' }),
+    PrismaModule,
+    InterviewsModule,
     LlmModule,
+    EvaluationModule,
+    DiscrepancyModule,
+    RoadmapModule, // جديد
+    PipelineModule,
   ],
   controllers: [AppController],
   providers: [AppService],
