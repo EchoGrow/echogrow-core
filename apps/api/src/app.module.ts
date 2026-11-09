@@ -10,9 +10,12 @@ import { EvaluationModule } from './modules/evaluation/evaluation.module';
 import { DiscrepancyModule } from './modules/discrepancy/discrepancy.module';
 import { PipelineModule } from './modules/pipeline/pipeline.module';
 import { RoadmapModule } from './modules/roadmap/roadmap.module'; // جديد
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 
 @Module({
   imports: [
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 10 }]),
     ConfigModule.forRoot({ isGlobal: true }),
     BullModule.forRootAsync({
       inject: [ConfigService],
@@ -33,6 +36,12 @@ import { RoadmapModule } from './modules/roadmap/roadmap.module'; // جديد
     PipelineModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
 export class AppModule {}

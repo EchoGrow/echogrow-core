@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { InterviewsService } from './interviews.service';
+import { Throttle } from '@nestjs/throttler';
 
 const MAX_CANDIDATES = 50;
 const MAX_FILES = MAX_CANDIDATES * 2; // transcript + resume per candidate
@@ -19,6 +20,7 @@ export class InterviewsController {
   constructor(private readonly interviewsService: InterviewsService) {}
 
   @Post('upload')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   async upload(@Body() body: any) {
     return this.interviewsService.upload(body);
   }

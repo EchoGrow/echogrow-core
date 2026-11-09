@@ -84,6 +84,14 @@ describe('E2E: REST endpoints (no LLM calls)', () => {
       expect(candidates).toBe(1);
       expect(sessions).toBeGreaterThanOrEqual(2);
     }, 60_000);
+
+    it('returns 429 Too Many Requests when rate limit is exceeded', async () => {
+      for (let i = 0; i < 10; i++) {
+        await api().post('/interviews/upload').send(valid);
+      }
+
+      await api().post('/interviews/upload').send(valid).expect(429);
+    });
   });
 
   // ============================================================
