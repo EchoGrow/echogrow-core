@@ -12,6 +12,7 @@ import {
   DiscrepancySchema,
   RoadmapResponseSchema,
   ScorecardSchema,
+  SpkExportSchema,
   BulkUploadMetadataSchema,
   BulkUploadResult,
 } from '@echogrow/shared';
@@ -412,6 +413,51 @@ export class InterviewsService {
     };
 
     return ScorecardSchema.parse(response);
+  }
+
+  async getSpkExport(interviewId: string) {
+    const session = await this.prisma.interviewSession.findUnique({
+      where: { id: interviewId },
+      include: {
+        candidate: true,
+        scorecard: {
+          include: {
+            dimensions: { include: { skillGaps: true } },
+            discrepancies: true,
+          },
+        },
+      },
+    });
+
+    if (!session) {
+      throw new NotFoundException('Interview session not found.');
+    }
+
+    if (session.status !== 'COMPLETED' || !session.scorecard) {
+      throw new BadRequestException(
+        'The interview must be completed and scored before it can be exported.',
+      );
+    }
+
+    return SpkExportSchema.parse({
+      candidate_id: session.candidate.id,
+      candidate_name: session.candidate.name,
+      verified_skills: [],
+      dimensions: session.scorecard.dimensions.map((dimension) => ({
+        name: DIMENSION_NAME_MAP[dimension.dimensionType],
+        score: dimension.score,
+      })),
+      discrepancies_flagged: session.scorecard.discrepancies.length,
+      recommended_upskilling: [
+        ...new Set(
+          session.scorecard.dimensions.flatMap((dimension) =>
+            dimension.skillGaps.map((gap) => gap.skillName),
+          ),
+        ),
+      ],
+      human_review_status:
+        session.scorecard.status === 'APPROVED' ? 'approved' : 'pending_review',
+    });
   }
 
   async forceEvaluation(interviewId: string) {

@@ -160,6 +160,70 @@ describe('E2E: REST endpoints (no LLM calls)', () => {
   });
 
   // ============================================================
+  // GET /interviews/:id/spk-export
+  // ============================================================
+  describe('GET /interviews/:id/spk-export', () => {
+    it('returns 404 for an unknown interview', async () => {
+      await api().get('/interviews/does-not-exist/spk-export').expect(404);
+    });
+
+    it.each(['PROCESSING', 'COMPLETED'] as const)(
+      'returns 400 for a %s interview without a scorecard',
+      async (status) => {
+        const session = await seedSession(prisma, { status });
+        await api().get(`/interviews/${session.id}/spk-export`).expect(400);
+      },
+    );
+
+    it('returns the Simera SPK payload with the exact shape', async () => {
+      const session = await seedSession(prisma, {
+        status: 'COMPLETED',
+        name: 'SPK Candidate',
+      });
+      const { scorecardId } = await seedScorecard(prisma, session.id, {
+        scores: [5, 4, 3, 2],
+        discrepancies: 3,
+        gaps: ['Kubernetes', 'Terraform'],
+      });
+      await prisma.scorecard.update({
+        where: { id: scorecardId },
+        data: { status: 'APPROVED' },
+      });
+
+      const { body } = await api()
+        .get(`/interviews/${session.id}/spk-export`)
+        .expect(200);
+
+      expect(body).toEqual({
+        candidate_id: expect.any(String),
+        candidate_name: 'SPK Candidate',
+        verified_skills: [],
+        dimensions: [
+          { name: 'Technical Depth', score: 5 },
+          { name: 'Communication Clarity', score: 4 },
+          { name: 'Domain Experience', score: 3 },
+          { name: 'Problem Solving', score: 2 },
+        ],
+        discrepancies_flagged: 3,
+        recommended_upskilling: ['Kubernetes', 'Terraform'],
+        human_review_status: 'approved',
+      });
+      expect(body.candidate_id).toBe(session.candidateId);
+      expect(Object.keys(body).sort()).toEqual(
+        [
+          'candidate_id',
+          'candidate_name',
+          'verified_skills',
+          'dimensions',
+          'discrepancies_flagged',
+          'recommended_upskilling',
+          'human_review_status',
+        ].sort(),
+      );
+    });
+  });
+
+  // ============================================================
   // GET /interviews/:id/discrepancies
   // ============================================================
   describe('GET /interviews/:id/discrepancies', () => {

@@ -6,6 +6,7 @@ import { EvaluationTab } from './pages/dashboard/EvaluationTab'
 import { ClaimVerificationTab } from './pages/dashboard/ClaimVerificationTab'
 import { GrowthPlanTab } from './pages/dashboard/GrowthPlanTab'
 import { ReviewPage } from './pages/dashboard/ReviewPage'
+import { ComparePage } from './pages/ComparePage'
 import { Toaster } from './components/ui'
 
 export default function App() {
@@ -15,6 +16,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Navigate to="/upload" replace />} />
         <Route path="/upload" element={<UploadPage />} />
+        <Route path="/compare" element={<ComparePage />} />
         <Route path="/dashboard/:interviewId" element={<DashboardLayout />}>
           <Route index element={<Navigate to="overview" replace />} />
           <Route path="overview" element={<OverviewTab />} />

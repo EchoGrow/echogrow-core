@@ -1,0 +1,36 @@
+{
+    "candidate_id":  "cmw9jcep70002lsyjcmbebe1l",
+    "candidate_name":  "Ahmed Al-Mansoor",
+    "verified_skills":  [
+
+                        ],
+    "dimensions":  [
+                       {
+                           "name":  "Technical Depth",
+                           "score":  2
+                       },
+                       {
+                           "name":  "Communication Clarity",
+                           "score":  3
+                       },
+                       {
+                           "name":  "Domain Experience",
+                           "score":  2
+                       },
+                       {
+                           "name":  "Problem Solving",
+                           "score":  2
+                       }
+                   ],
+    "discrepancies_flagged":  2,
+    "recommended_upskilling":  [
+                                   "Database performance tuning tools",
+                                   "PostgreSQL query optimization",
+                                   "EXPLAIN ANALYZE",
+                                   "Database execution plans",
+                                   "Database Diagnostics",
+                                   "GraphQL",
+                                   "PostgreSQL"
+                               ],
+    "human_review_status":  "pending_review"
+}

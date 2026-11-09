@@ -1,0 +1,30 @@
+{
+    "candidate_id":  "cmw9jcea60000lsyjb58snymt",
+    "candidate_name":  "Maya Lin",
+    "verified_skills":  [
+
+                        ],
+    "dimensions":  [
+                       {
+                           "name":  "Technical Depth",
+                           "score":  5
+                       },
+                       {
+                           "name":  "Communication Clarity",
+                           "score":  5
+                       },
+                       {
+                           "name":  "Domain Experience",
+                           "score":  5
+                       },
+                       {
+                           "name":  "Problem Solving",
+                           "score":  5
+                       }
+                   ],
+    "discrepancies_flagged":  1,
+    "recommended_upskilling":  [
+
+                               ],
+    "human_review_status":  "pending_review"
+}

@@ -82,6 +82,11 @@ export class InterviewsController {
     return this.interviewsService.getScorecard(id);
   }
 
+  @Get(':id/spk-export')
+  async getSpkExport(@Param('id') id: string) {
+    return this.interviewsService.getSpkExport(id);
+  }
+
   @Post(':id/force-evaluate')
   async forceEvaluation(@Param('id') id: string) {
     return this.interviewsService.forceEvaluation(id);

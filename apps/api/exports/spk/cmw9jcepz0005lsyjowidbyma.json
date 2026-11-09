@@ -1,0 +1,42 @@
+{
+    "candidate_id":  "cmw9jcepw0004lsyjhsvw2339",
+    "candidate_name":  "Jordan Reed",
+    "verified_skills":  [
+
+                        ],
+    "dimensions":  [
+                       {
+                           "name":  "Technical Depth",
+                           "score":  2
+                       },
+                       {
+                           "name":  "Communication Clarity",
+                           "score":  2
+                       },
+                       {
+                           "name":  "Domain Experience",
+                           "score":  2
+                       },
+                       {
+                           "name":  "Problem Solving",
+                           "score":  1
+                       }
+                   ],
+    "discrepancies_flagged":  0,
+    "recommended_upskilling":  [
+                                   "Backend Development",
+                                   "API Error Handling",
+                                   "Custom Middleware",
+                                   "Relational Databases",
+                                   "PostgreSQL",
+                                   "Foreign Keys",
+                                   "Database Schemas",
+                                   "Database Constraints",
+                                   "Production Debugging",
+                                   "Systematic debugging",
+                                   "Error handling",
+                                   "Database relations",
+                                   "Express backend templates"
+                               ],
+    "human_review_status":  "pending_review"
+}
