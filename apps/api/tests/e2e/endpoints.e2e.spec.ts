@@ -157,6 +157,66 @@ describe('E2E: REST endpoints (no LLM calls)', () => {
       expect(body.pendingDiscrepancies).toBe(2);
       expect(body.skillGaps).toBe(3);
     });
+
+    // ============================================================
+    // timeSaved field
+    // ============================================================
+    it('returns a computed timeSaved object when status is COMPLETED', async () => {
+      const s = await seedSession(prisma, {
+        status: 'COMPLETED',
+        isScored: true,
+        isVerified: true,
+        isPlanned: true,
+        transcript: 'x '.repeat(300),
+        resume: 'y '.repeat(100),
+      });
+      await seedScorecard(prisma, s.id, {
+        scores: [2, 4, 2, 3],
+        discrepancies: 2,
+        gaps: ['Docker'],
+      });
+
+      // Simulate processing time by adjusting updatedAt in the DB
+      await prisma.interviewSession.update({
+        where: { id: s.id },
+        data: {
+          createdAt: new Date(Date.now() - 90_000),
+          updatedAt: new Date(),
+        },
+      });
+
+      const { body } = await api().get(`/interviews/${s.id}/scorecard`).expect(200);
+      expect(body.status).toBe('scored');
+      expect(body.timeSaved).toBeDefined();
+      expect(body.timeSaved.manualMinutes).toBeGreaterThan(5);
+      expect(body.timeSaved.echoGrowSeconds).toBeGreaterThanOrEqual(0);
+      expect(body.timeSaved.echoGrowSeconds).toBeLessThanOrEqual(180);
+      expect(body.timeSaved.savedSeconds).toBeGreaterThan(0);
+      expect(typeof body.timeSaved.savedMinutes).toBe('number');
+    });
+
+    it('caps echoGrowSeconds at 180 seconds even when the pipeline took longer', async () => {
+      const s = await seedSession(prisma, {
+        status: 'COMPLETED',
+        isScored: true,
+        isVerified: true,
+        isPlanned: true,
+        transcript: 'x '.repeat(300),
+        resume: 'y '.repeat(100),
+      });
+      await seedScorecard(prisma, s.id, { scores: [3, 3, 3, 3], discrepancies: 0, gaps: [] });
+
+      await prisma.interviewSession.update({
+        where: { id: s.id },
+        data: {
+          createdAt: new Date(Date.now() - 600_000),
+          updatedAt: new Date(),
+        },
+      });
+
+      const { body } = await api().get(`/interviews/${s.id}/scorecard`).expect(200);
+      expect(body.timeSaved.echoGrowSeconds).toBe(180);
+    });
   });
 
   // ============================================================
@@ -344,10 +404,178 @@ describe('E2E: REST endpoints (no LLM calls)', () => {
   });
 
   // ============================================================
+  // GET /interviews/:id/spk-export
+  // ============================================================
+  describe('GET /interviews/:id/spk-export', () => {
+    it('404 for unknown interview', async () => {
+      await api().get('/interviews/does-not-exist/spk-export').expect(404);
+    });
+
+    it('400 when the interview is not COMPLETED yet', async () => {
+      const s = await seedSession(prisma, { status: 'PROCESSING' });
+      await api().get(`/interviews/${s.id}/spk-export`).expect(400);
+    });
+
+    it('404 when the SPK profile has not been built yet', async () => {
+      const s = await seedSession(prisma, { status: 'COMPLETED' });
+      await seedScorecard(prisma, s.id, { scores: [4, 4, 4, 4], discrepancies: 0, gaps: [] });
+
+      await api().get(`/interviews/${s.id}/spk-export`).expect(404);
+    });
+
+    it('200 with a fully shaped SPK payload when the profile exists', async () => {
+      const s = await seedSession(prisma, {
+        status: 'COMPLETED',
+        isScored: true,
+        isVerified: true,
+        isPlanned: true,
+        name: 'SPK User',
+      });
+      await seedScorecard(prisma, s.id, {
+        scores: [2, 4, 3, 2],
+        discrepancies: 1,
+        gaps: ['Kubernetes', 'Docker'],
+      });
+
+      const scorecard = await prisma.scorecard.findUnique({ where: { interviewId: s.id } });
+      const discrepancy = await prisma.discrepancy.findFirst({
+        where: { scorecardId: scorecard!.id },
+      });
+
+      await prisma.spkProfile.create({
+        data: {
+          interviewId: s.id,
+          seniority: 'Mid-level',
+          primaryRole: 'Backend Developer',
+          timezone: 'UTC+3',
+          languages: ['English', 'Arabic'] as any,
+          yearsOfExperience: 3,
+          schemaVersion: '1.0.0',
+          spkPayload: {
+            candidate_id: s.candidateId,
+            candidate_name: 'SPK User',
+            overall_score: 55,
+            confidence: 0.9,
+            dimensions: [
+              {
+                name: 'Technical Depth',
+                score: 40,
+                raw_score: 2,
+                reason: 'Weak on optimization',
+                evidence_quote: 'I never used EXPLAIN',
+                evidence_timestamp: '00:03:15',
+              },
+              {
+                name: 'Communication Clarity',
+                score: 80,
+                raw_score: 4,
+                reason: 'Clear',
+                evidence_quote: 'Let me explain...',
+                evidence_timestamp: '00:01:00',
+              },
+              {
+                name: 'Domain Experience',
+                score: 60,
+                raw_score: 3,
+                reason: 'Some gaps',
+                evidence_quote: 'I built monoliths',
+                evidence_timestamp: '00:02:10',
+              },
+              {
+                name: 'Problem Solving',
+                score: 40,
+                raw_score: 2,
+                reason: 'Naive approach',
+                evidence_quote: 'I guessed',
+                evidence_timestamp: '00:04:30',
+              },
+            ],
+            verified_skills: ['Node.js', 'Express', 'JWT'],
+            recommended_upskilling: [
+              { skill: 'Kubernetes', priority: 'MEDIUM' },
+              { skill: 'Docker', priority: 'MEDIUM' },
+            ],
+            roadmap: [
+              {
+                week: 1,
+                skill: 'Kubernetes',
+                task: 'Learn fundamentals',
+                resource_url: 'https://kubernetes.io/docs/',
+              },
+              {
+                week: 2,
+                skill: 'Docker',
+                task: 'Practice Dockerfile',
+                resource_url: 'https://docs.docker.com/',
+              },
+            ],
+            discrepancies: [
+              {
+                field: discrepancy!.claim,
+                cv_says: discrepancy!.cvQuote ?? '',
+                interview_says: discrepancy!.interviewQuote ?? '',
+                status: 'pending',
+                confidence: 0.9,
+              },
+            ],
+            discrepancies_count: 1,
+            human_review_status: 'pending',
+            seniority: 'Mid-level',
+            primary_role: 'Backend Developer',
+            timezone: 'UTC+3',
+            languages: ['English', 'Arabic'],
+            years_of_experience: 3,
+            generated_at: new Date().toISOString(),
+            schema_version: '1.0.0',
+          },
+        },
+      });
+
+      const { body } = await api().get(`/interviews/${s.id}/spk-export`).expect(200);
+
+      expect(body.candidate_id).toBe(s.candidateId);
+      expect(body.candidate_name).toBe('SPK User');
+      expect(body.overall_score).toBe(55);
+      expect(body.confidence).toBe(0.9);
+      expect(body.dimensions).toHaveLength(4);
+      expect(body.verified_skills).toEqual(['Node.js', 'Express', 'JWT']);
+      expect(body.recommended_upskilling).toHaveLength(2);
+      expect(body.roadmap).toHaveLength(2);
+      expect(body.roadmap[0].week).toBe(1);
+      expect(body.roadmap[1].week).toBe(2);
+      expect(body.discrepancies).toHaveLength(1);
+      expect(body.discrepancies_count).toBe(1);
+      expect(body.human_review_status).toBe('pending');
+      expect(body.seniority).toBe('Mid-level');
+      expect(body.primary_role).toBe('Backend Developer');
+      expect(body.schema_version).toBe('1.0.0');
+      expect(body.generated_at).toBeTruthy();
+    });
+  });
+
+  // ============================================================
+  // POST /interviews/:id/spk-rebuild
+  // ============================================================
+  describe('POST /interviews/:id/spk-rebuild', () => {
+    it('404 for unknown interview', async () => {
+      const res = await api().post('/interviews/does-not-exist/spk-rebuild').expect(404);
+      expect(res.body.message).toMatch(/not found/i);
+    });
+
+    it('201 and returns { interviewId, status: "rebuilt" }', async () => {
+      const s = await seedSession(prisma, { status: 'COMPLETED' });
+      await seedScorecard(prisma, s.id, { scores: [3, 3, 3, 3], discrepancies: 0, gaps: [] });
+
+      const { body } = await api().post(`/interviews/${s.id}/spk-rebuild`).expect(201);
+      expect(body.interviewId).toBe(s.id);
+      expect(body.status).toBe('rebuilt');
+    });
+  });
+
+  // ============================================================
   // POST /interviews/bulk-upload
   // ============================================================
   describe('POST /interviews/bulk-upload', () => {
-    // ---- Reject: malformed request ----
     it('400 when no files are attached', async () => {
       await api()
         .post('/interviews/bulk-upload')
@@ -418,7 +646,6 @@ describe('E2E: REST endpoints (no LLM calls)', () => {
       await req.expect(400);
     });
 
-    // ---- Success: single candidate ----
     it('201 with a single valid candidate pair', async () => {
       const pair = validBulkPair('single');
       const req = api()
@@ -447,7 +674,6 @@ describe('E2E: REST endpoints (no LLM calls)', () => {
       expect(session?.candidate.email).toBe(pair.metadata.candidateEmail);
     }, 60_000);
 
-    // ---- Success: multiple candidates ----
     it('201 with 3 candidates, all queued', async () => {
       const pairs = [validBulkPair('m1'), validBulkPair('m2'), validBulkPair('m3')];
       const req = api()
@@ -469,7 +695,6 @@ describe('E2E: REST endpoints (no LLM calls)', () => {
       }
     }, 120_000);
 
-    // ---- Partial failure: missing file ----
     it('201 with mixed results: one queued, one failed (missing file)', async () => {
       const ok = validBulkPair('ok');
       const missing = {
@@ -497,7 +722,6 @@ describe('E2E: REST endpoints (no LLM calls)', () => {
       await pollNeedsReview(queued.interviewId);
     }, 60_000);
 
-    // ---- Partial failure: short transcript ----
     it('201 with one failed candidate because transcript is too short', async () => {
       const metadata = {
         candidateName: 'Short Transcript',
@@ -521,7 +745,6 @@ describe('E2E: REST endpoints (no LLM calls)', () => {
       expect(res.body.results[0].error).toMatch(/< 40 chars/);
     });
 
-    // ---- Partial failure: oversized file (rejected individually) ----
     it('201 rejects files larger than 2MB individually, processes the rest', async () => {
       const ok = validBulkPair('ok2');
       const bigFile = {
@@ -551,7 +774,6 @@ describe('E2E: REST endpoints (no LLM calls)', () => {
       expect(res.body.results[0].error).toMatch(/Resume file .* was not uploaded or was rejected/);
     });
 
-    // ---- Partial failure: empty file (rejected individually) ----
     it('201 rejects empty files individually', async () => {
       const metadata = {
         candidateName: 'Empty File',
@@ -574,7 +796,6 @@ describe('E2E: REST endpoints (no LLM calls)', () => {
       expect(res.body.summary.failed).toBe(1);
     });
 
-    // ---- Case-insensitive filename matching ----
     it('matches filenames case-insensitively', async () => {
       const metadata = {
         candidateName: 'Case Test',
@@ -595,7 +816,6 @@ describe('E2E: REST endpoints (no LLM calls)', () => {
       await pollNeedsReview(res.body.results[0].interviewId);
     }, 60_000);
 
-    // ---- Idempotency: same file uploaded twice = 2 sessions ----
     it('creates a separate session when the same file is uploaded twice', async () => {
       const pair = validBulkPair('dup');
 

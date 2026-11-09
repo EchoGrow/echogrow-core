@@ -7,6 +7,7 @@ import {
   TrendingUp,
   ShieldCheck,
   AlertCircle,
+  AlertTriangle,
   RotateCcw,
   Trash2,
   ArrowRight,
@@ -19,13 +20,16 @@ import {
   Zap,
   Clock,
   Timer,
+  Download,
+  Database,
+  CheckCircle2 as CheckCircleIcon,
 } from 'lucide-react';
 import { SEO } from '../../components/SEO';
 import { Alert, Button, Card, toast } from '../../components/ui';
 import { ReviewBanner } from '../../components/ui/ReviewBanner';
 import { ProcessingState } from '../../components/dashboard/ProcessingState';
 import { useScorecard } from '../../lib/scorecard/useScorecard';
-import { forceEvaluation } from '../../lib/api';
+import { forceEvaluation, getSpkExport, rebuildSpkProfile } from '../../lib/api';
 import type { ScorecardDimension, TimeSavedBreakdown } from '../../lib/api';
 import { cn } from '../../lib/cn';
 import { fadeUp, scaleIn, staggerContainer } from '../../lib/animations';
@@ -147,10 +151,12 @@ function PageHeading({
   candidateName,
   interviewDate,
   interviewId,
+  spkExportButton,
 }: {
   candidateName: string;
   interviewDate: string;
   interviewId: string;
+  spkExportButton?: React.ReactNode;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -232,20 +238,23 @@ function PageHeading({
           </div>
         </div>
 
-        <span className="inline-flex shrink-0 items-center gap-2 rounded-full border border-success-500/30 bg-success-50 px-3 py-1.5 text-xs font-medium text-success-700 dark:bg-success-500/10 dark:text-success-500">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success-500 opacity-75" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-success-500" />
+        <div className="flex flex-wrap items-center gap-2">
+          {spkExportButton}
+          <span className="inline-flex shrink-0 items-center gap-2 rounded-full border border-success-500/30 bg-success-50 px-3 py-1.5 text-xs font-medium text-success-700 dark:bg-success-500/10 dark:text-success-500">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success-500 opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-success-500" />
+            </span>
+            Ready for review
           </span>
-          Ready for review
-        </span>
+        </div>
       </div>
     </motion.header>
   );
 }
 
 // ============================================================
-// Average Score Card (Row 1, Col 1) — redesigned
+// Average Score Card
 // ============================================================
 function AverageScoreCard({ average, count }: { average: number; count: number }) {
   const tone = TONES[toneFor(average)];
@@ -256,7 +265,6 @@ function AverageScoreCard({ average, count }: { average: number; count: number }
   return (
     <motion.div variants={scaleIn} className="h-full">
       <Card className="group relative flex h-full flex-col overflow-hidden p-5 shadow-sm ring-1 ring-line/60 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lift hover:ring-line-strong">
-        {/* Soft gradient overlay */}
         <div
           className={cn(
             'pointer-events-none absolute inset-0 bg-gradient-to-br opacity-70 transition-opacity duration-300 group-hover:opacity-100',
@@ -266,7 +274,6 @@ function AverageScoreCard({ average, count }: { average: number; count: number }
         />
 
         <div className="relative flex flex-1 items-center gap-5">
-          {/* Circle */}
           <div className="relative h-[88px] w-[88px] shrink-0">
             <svg viewBox="0 0 88 88" className="h-[88px] w-[88px] -rotate-90" aria-hidden="true">
               <circle cx="44" cy="44" r={radius} fill="none" strokeWidth="7" className="stroke-chip" />
@@ -318,7 +325,6 @@ function AverageScoreCard({ average, count }: { average: number; count: number }
           </div>
         </div>
 
-        {/* Footer */}
         <div className="relative mt-4 flex items-center justify-between border-t border-line/70 pt-3 text-[11px]">
           <span className="text-fg-muted">Averaged across</span>
           <span className="font-semibold text-fg-strong">{count} dimensions</span>
@@ -329,7 +335,7 @@ function AverageScoreCard({ average, count }: { average: number; count: number }
 }
 
 // ============================================================
-// Stat Card (Row 1, Col 2/3) — redesigned
+// Stat Card
 // ============================================================
 function StatCard({
   label,
@@ -352,7 +358,6 @@ function StatCard({
 
   const card = (
     <Card className="group relative flex h-full flex-col overflow-hidden p-5 shadow-sm ring-1 ring-line/60 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lift hover:ring-line-strong">
-      {/* Soft gradient overlay */}
       <div
         className={cn(
           'pointer-events-none absolute inset-0 bg-gradient-to-br opacity-70 transition-opacity duration-300 group-hover:opacity-100',
@@ -361,7 +366,6 @@ function StatCard({
         aria-hidden="true"
       />
 
-      {/* Top row: icon + label */}
       <div className="relative flex items-center justify-between gap-3">
         <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-fg-muted">
           {label}
@@ -377,15 +381,12 @@ function StatCard({
         </span>
       </div>
 
-      {/* Value */}
       <p className="relative mt-3 text-3xl font-bold tracking-tight tabular-nums text-fg-strong">
         {value}
       </p>
 
-      {/* Hint */}
       <p className="relative mt-1 text-xs leading-relaxed text-fg-muted">{hint}</p>
 
-      {/* Footer link */}
       {href ? (
         <span className="relative mt-auto inline-flex items-center gap-1 pt-4 text-[11px] font-semibold text-accent-700 transition-colors group-hover:text-accent-800 dark:text-accent-300 dark:group-hover:text-accent-200">
           {hrefLabel}
@@ -416,7 +417,7 @@ function StatCard({
 }
 
 // ============================================================
-// Time Saved Card (Row 2, Col 2/3) — redesigned
+// Time Saved Card
 // ============================================================
 function TimeSavedCard({ timeSaved }: { timeSaved?: TimeSavedBreakdown }) {
   const data: TimeSavedBreakdown = timeSaved ?? {
@@ -426,7 +427,6 @@ function TimeSavedCard({ timeSaved }: { timeSaved?: TimeSavedBreakdown }) {
     savedSeconds: 0,
   };
 
-  // Compute saved ratio for the bar
   const manualSeconds = data.manualMinutes * 60;
   const savedPercent = manualSeconds > 0
     ? Math.min(100, Math.round((data.savedSeconds / manualSeconds) * 100))
@@ -435,13 +435,11 @@ function TimeSavedCard({ timeSaved }: { timeSaved?: TimeSavedBreakdown }) {
   return (
     <motion.div variants={fadeUp} className="h-full">
       <Card className="group relative flex h-full flex-col overflow-hidden p-5 shadow-sm ring-1 ring-line/60 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lift hover:ring-line-strong">
-        {/* Soft success gradient */}
         <div
           className="pointer-events-none absolute inset-0 bg-gradient-to-br from-success-500/[0.08] via-transparent to-transparent opacity-70 transition-opacity duration-300 group-hover:opacity-100"
           aria-hidden="true"
         />
 
-        {/* Top row: label + icon */}
         <div className="relative flex items-center justify-between gap-3">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-fg-muted">
@@ -464,7 +462,6 @@ function TimeSavedCard({ timeSaved }: { timeSaved?: TimeSavedBreakdown }) {
           </span>
         </div>
 
-        {/* Comparison bar */}
         <div className="relative mt-4">
           <div className="flex items-center justify-between text-[10px] font-medium">
             <span className="inline-flex items-center gap-1 text-fg-muted">
@@ -494,12 +491,166 @@ function TimeSavedCard({ timeSaved }: { timeSaved?: TimeSavedBreakdown }) {
           </div>
         </div>
 
-        {/* Footer */}
         <p className="relative mt-auto pt-3 text-[10px] leading-relaxed text-fg-muted">
           Based on transcript length, CV length, discrepancies, and weak dimensions
         </p>
       </Card>
     </motion.div>
+  );
+}
+
+// ============================================================
+// SPK Preview Card
+// ============================================================
+function SpkPreviewCard({
+  dimensionsCount,
+  discrepanciesFlagged,
+  pendingDiscrepancies,
+  skillGaps,
+}: {
+  dimensionsCount: number;
+  discrepanciesFlagged: number;
+  pendingDiscrepancies: number;
+  skillGaps: number;
+}) {
+  const isApproved = pendingDiscrepancies === 0;
+
+  return (
+    <motion.div variants={fadeUp}>
+      <Card className="group relative flex flex-col overflow-hidden p-5 shadow-sm ring-1 ring-line/60 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lift hover:ring-line-strong">
+        <div
+          className={cn(
+            'pointer-events-none absolute inset-0 bg-gradient-to-br opacity-70 transition-opacity duration-300 group-hover:opacity-100',
+            isApproved ? 'from-success-500/[0.08] via-transparent to-transparent' : 'from-warning-500/[0.08] via-transparent to-transparent',
+          )}
+          aria-hidden="true"
+        />
+
+        <div className="relative flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-fg-muted">
+              Agent David
+            </p>
+            <p className="mt-1 text-sm font-semibold text-fg-strong">SPK export ready</p>
+          </div>
+          <span
+            aria-hidden="true"
+            className={cn(
+              'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ring-1 transition-all duration-300 group-hover:scale-105',
+              isApproved
+                ? 'bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500 ring-success-500/20'
+                : 'bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-warning-500 ring-warning-500/20',
+            )}
+          >
+            <Database className="h-4 w-4" />
+          </span>
+        </div>
+
+        <div className="relative mt-4 flex items-center justify-between gap-3">
+          <div className="flex flex-1 flex-col">
+            <span className="text-xl font-bold tabular-nums text-fg-strong">{dimensionsCount}</span>
+            <span className="text-[10px] text-fg-muted">Dimensions</span>
+          </div>
+          <div className="h-8 w-px bg-line" aria-hidden="true" />
+          <div className="flex flex-1 flex-col">
+            <span className="text-xl font-bold tabular-nums text-fg-strong">{discrepanciesFlagged}</span>
+            <span className="text-[10px] text-fg-muted">Flags</span>
+          </div>
+          <div className="h-8 w-px bg-line" aria-hidden="true" />
+          <div className="flex flex-1 flex-col">
+            <span className="text-xl font-bold tabular-nums text-fg-strong">{skillGaps}</span>
+            <span className="text-[10px] text-fg-muted">Gaps</span>
+          </div>
+        </div>
+
+        <div className="relative mt-4 flex items-center justify-between gap-2 border-t border-line/70 pt-3">
+          <span
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ring-1',
+              isApproved
+                ? 'text-success-700 dark:text-success-500 bg-success-50 dark:bg-success-500/10 ring-success-500/20'
+                : 'text-warning-700 dark:text-warning-500 bg-warning-50 dark:bg-warning-500/10 ring-warning-500/20',
+            )}
+          >
+            {isApproved ? (
+              <CheckCircleIcon className="h-3 w-3" />
+            ) : (
+              <AlertTriangle className="h-3 w-3" />
+            )}
+            {isApproved ? 'Approved' : `${pendingDiscrepancies} pending`}
+          </span>
+        </div>
+      </Card>
+    </motion.div>
+  );
+}
+
+// ============================================================
+// Download SPK JSON Button (with Rebuild fallback)
+// ============================================================
+function DownloadSpkButton({
+  interviewId,
+  candidateName,
+  isCompleted,
+  onRebuild,
+}: {
+  interviewId: string;
+  candidateName: string;
+  isCompleted: boolean;
+  onRebuild?: () => void;
+}) {
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExport = async () => {
+    if (!isCompleted) {
+      toast.error('SPK export unavailable', {
+        description: 'This interview is not completed yet. Wait for the analysis to finish.',
+      });
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      const data = await getSpkExport(interviewId);
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: 'application/json',
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `spk-${candidateName.replace(/\s+/g, '-')}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success('SPK JSON downloaded', { description: 'Ready for Agent David.' });
+    } catch (cause) {
+      toast.error('Failed to export SPK', {
+        description: cause instanceof Error ? cause.message : 'Unknown error',
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  return (
+    <Button
+      variant="secondary"
+      size="sm"
+      onClick={handleExport}
+      disabled={isExporting || !isCompleted}
+      title={isCompleted ? 'Download SPK JSON' : 'Available after interview completes'}
+      className="whitespace-nowrap"
+    >
+      {isExporting ? (
+        <span className="animate-pulse">Exporting…</span>
+      ) : (
+        <>
+          <Download className="mr-1.5 h-3.5 w-3.5" />
+          Export SPK
+        </>
+      )}
+    </Button>
   );
 }
 
@@ -569,6 +720,75 @@ function DimensionsCard({ dimensions, base }: { dimensions: ScorecardDimension[]
 }
 
 // ============================================================
+// Next Step Card
+// ============================================================
+function NextStepCard({
+  base,
+  pendingDiscrepancies,
+}: {
+  base: string;
+  pendingDiscrepancies?: number;
+}) {
+  return (
+    <motion.div variants={fadeUp}>
+      <Card className="flex flex-col overflow-hidden p-0 shadow-sm">
+        <div className="flex items-center gap-2 border-b border-line bg-gradient-to-r from-chip/50 to-transparent px-6 py-4">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-500/15 text-accent-700 ring-1 ring-accent-500/20 dark:text-accent-300">
+            <Sparkles className="h-4 w-4" />
+          </div>
+          <h2 className="text-base font-semibold text-fg-strong">Next step</h2>
+        </div>
+
+        <div className="p-6">
+          <p className="text-sm leading-relaxed text-fg-muted">
+            {nextStepSentence(pendingDiscrepancies)}
+          </p>
+
+          <div className="mt-5 space-y-2">
+            <Link
+              to={`${base}/evaluation`}
+              className="group flex items-center justify-between gap-3 rounded-xl border border-line bg-chip/60 px-4 py-3 text-sm font-medium text-fg transition-all duration-200 hover:border-accent-500 hover:bg-accent-50/40 active:scale-[0.98] dark:hover:bg-accent-500/10"
+            >
+              <span className="flex items-center gap-2">
+                <BarChart3 className="h-4 w-4 text-accent-600 dark:text-accent-400" />
+                Evaluation &amp; evidence
+              </span>
+              <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+            </Link>
+            <Link
+              to={`${base}/discrepancies`}
+              className="group flex items-center justify-between gap-3 rounded-xl border border-line bg-chip/60 px-4 py-3 text-sm font-medium text-fg transition-all duration-200 hover:border-accent-500 hover:bg-accent-50/40 active:scale-[0.98] dark:hover:bg-accent-500/10"
+            >
+              <span className="flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-accent-600 dark:text-accent-400" />
+                Claim verification
+              </span>
+              <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+            </Link>
+            <Link
+              to={`${base}/roadmap`}
+              className="group flex items-center justify-between gap-3 rounded-xl border border-line bg-chip/60 px-4 py-3 text-sm font-medium text-fg transition-all duration-200 hover:border-accent-500 hover:bg-accent-50/40 active:scale-[0.98] dark:hover:bg-accent-500/10"
+            >
+              <span className="flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-accent-600 dark:text-accent-400" />
+                Growth plan
+              </span>
+              <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+            </Link>
+          </div>
+        </div>
+
+        <div className="border-t border-line bg-gradient-to-r from-chip/30 to-transparent px-6 py-4">
+          <p className="text-xs leading-relaxed text-fg-muted">
+            Scores are evidence-based, not a hiring decision. Every flag stays pending until a human reviews it.
+          </p>
+        </div>
+      </Card>
+    </motion.div>
+  );
+}
+
+// ============================================================
 // Loading skeleton
 // ============================================================
 function OverviewSkeleton() {
@@ -595,17 +815,6 @@ function OverviewSkeleton() {
             <div className="mt-3 h-3 w-28 rounded skeleton" />
           </div>
         ))}
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded-card border border-line bg-surface-card p-5">
-          <div className="h-4 w-24 rounded skeleton" />
-          <div className="mt-4 h-8 w-16 rounded skeleton" />
-        </div>
-        <div className="rounded-card border border-line bg-surface-card p-5 sm:col-span-2">
-          <div className="h-4 w-24 rounded skeleton" />
-          <div className="mt-4 h-8 w-32 rounded skeleton" />
-        </div>
       </div>
     </div>
   );
@@ -783,6 +992,7 @@ export function OverviewTab() {
     dimensions,
     overallConfidence,
     pendingDiscrepancies,
+    totalDiscrepancies,
     skillGaps,
     timeSaved,
   } = scorecard;
@@ -793,13 +1003,24 @@ export function OverviewTab() {
       <SEO title={`${candidateName} · Interview overview`} description={`Scorecard overview for ${candidateName}.`} noIndex />
 
       <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-8">
-        <PageHeading candidateName={candidateName} interviewDate={interviewDate} interviewId={interviewId} />
+        <PageHeading
+          candidateName={candidateName}
+          interviewDate={interviewDate}
+          interviewId={interviewId}
+          spkExportButton={
+            <DownloadSpkButton
+              interviewId={interviewId}
+              candidateName={candidateName}
+              isCompleted={true}
+            />
+          }
+        />
 
         {dimensions.length === 0 ? (
           <EmptyState base={base} />
         ) : (
           <>
-            {/* Row 1: 3 cards (Overall, Discrepancies, Gaps) */}
+            {/* Row 1: 3 cards */}
             <div className="grid gap-4 sm:grid-cols-3">
               <AverageScoreCard average={average} count={dimensions.length} />
 
@@ -824,7 +1045,7 @@ export function OverviewTab() {
               />
             </div>
 
-            {/* Row 2: Confidence (1/3) + Time Saved (2/3) */}
+            {/* Row 2: Confidence + Time Saved */}
             <div className="grid gap-4 sm:grid-cols-3">
               <StatCard
                 label="Model confidence"
@@ -838,65 +1059,19 @@ export function OverviewTab() {
               </div>
             </div>
 
-            {/* Dimensions + Next Step */}
-            <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-              <DimensionsCard dimensions={dimensions} base={base} />
+            {/* Row 3: Left column (SPK + Dimensions) | Right column (Next Step) */}
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] items-start">
+              <div className="flex flex-col gap-4">
+                <SpkPreviewCard
+                  dimensionsCount={dimensions.length}
+                  discrepanciesFlagged={totalDiscrepancies ?? 0}
+                  pendingDiscrepancies={pendingDiscrepancies ?? 0}
+                  skillGaps={skillGaps ?? 0}
+                />
+                <DimensionsCard dimensions={dimensions} base={base} />
+              </div>
 
-              <motion.div variants={fadeUp}>
-                <Card className="flex h-full flex-col overflow-hidden p-0 shadow-sm">
-                  <div className="flex items-center gap-2 border-b border-line bg-gradient-to-r from-chip/50 to-transparent px-6 py-4">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-500/15 text-accent-700 ring-1 ring-accent-500/20 dark:text-accent-300">
-                      <Sparkles className="h-4 w-4" />
-                    </div>
-                    <h2 className="text-base font-semibold text-fg-strong">Next step</h2>
-                  </div>
-
-                  <div className="flex-1 p-6">
-                    <p className="text-sm leading-relaxed text-fg-muted">
-                      {nextStepSentence(pendingDiscrepancies)}
-                    </p>
-
-                    <div className="mt-5 space-y-2">
-                      <Link
-                        to={`${base}/evaluation`}
-                        className="group flex items-center justify-between gap-3 rounded-xl border border-line bg-chip/60 px-4 py-3 text-sm font-medium text-fg transition-all duration-200 hover:border-accent-500 hover:bg-accent-50/40 active:scale-[0.98] dark:hover:bg-accent-500/10"
-                      >
-                        <span className="flex items-center gap-2">
-                          <BarChart3 className="h-4 w-4 text-accent-600 dark:text-accent-400" />
-                          Evaluation &amp; evidence
-                        </span>
-                        <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
-                      </Link>
-                      <Link
-                        to={`${base}/discrepancies`}
-                        className="group flex items-center justify-between gap-3 rounded-xl border border-line bg-chip/60 px-4 py-3 text-sm font-medium text-fg transition-all duration-200 hover:border-accent-500 hover:bg-accent-50/40 active:scale-[0.98] dark:hover:bg-accent-500/10"
-                      >
-                        <span className="flex items-center gap-2">
-                          <ShieldCheck className="h-4 w-4 text-accent-600 dark:text-accent-400" />
-                          Claim verification
-                        </span>
-                        <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
-                      </Link>
-                      <Link
-                        to={`${base}/roadmap`}
-                        className="group flex items-center justify-between gap-3 rounded-xl border border-line bg-chip/60 px-4 py-3 text-sm font-medium text-fg transition-all duration-200 hover:border-accent-500 hover:bg-accent-50/40 active:scale-[0.98] dark:hover:bg-accent-500/10"
-                      >
-                        <span className="flex items-center gap-2">
-                          <TrendingUp className="h-4 w-4 text-accent-600 dark:text-accent-400" />
-                          Growth plan
-                        </span>
-                        <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
-                      </Link>
-                    </div>
-                  </div>
-
-                  <div className="border-t border-line bg-gradient-to-r from-chip/30 to-transparent px-6 py-4">
-                    <p className="text-xs leading-relaxed text-fg-muted">
-                      Scores are evidence-based, not a hiring decision. Every flag stays pending until a human reviews it.
-                    </p>
-                  </div>
-                </Card>
-              </motion.div>
+              <NextStepCard base={base} pendingDiscrepancies={pendingDiscrepancies} />
             </div>
           </>
         )}
