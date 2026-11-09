@@ -57,6 +57,7 @@ model InterviewSession {
 
   candidate Candidate  @relation(fields: [candidateId], references: [id], onDelete: Restrict)
   scorecard Scorecard?
+  spkProfile SpkProfile?
 
   @@index([candidateId])
   @@index([transcriptHash])
@@ -189,4 +190,31 @@ model RoadmapItem {
 
   @@index([roadmapId])
   @@map("roadmap_items")
+}
+
+// SpkProfile (Simera SPK export snapshot)
+model SpkProfile {
+  id          String   @id @default(cuid())
+  interviewId String   @unique @map("interview_id")
+
+  // Metadata extracted once by LLM
+  seniority         String?  @map("seniority")
+  primaryRole       String?  @map("primary_role")
+  timezone          String?  @map("timezone")
+  languages         Json?    @map("languages")           // string[]
+  yearsOfExperience Int?     @map("years_of_experience")
+
+  // Snapshot of full SPK payload (JSONB)
+  spkPayload    Json     @map("spk_payload")
+
+  // Versioning for future schema changes
+  schemaVersion String   @default("1.0.0") @map("schema_version")
+
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  interview     InterviewSession @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+
+  @@index([interviewId])
+  @@map("spk_profiles")
 }

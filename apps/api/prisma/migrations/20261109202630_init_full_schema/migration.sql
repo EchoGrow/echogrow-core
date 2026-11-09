@@ -122,6 +122,23 @@ CREATE TABLE "roadmap_items" (
     CONSTRAINT "roadmap_items_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "spk_profiles" (
+    "id" TEXT NOT NULL,
+    "interview_id" TEXT NOT NULL,
+    "seniority" TEXT,
+    "primary_role" TEXT,
+    "timezone" TEXT,
+    "languages" JSONB,
+    "years_of_experience" INTEGER,
+    "spk_payload" JSONB NOT NULL,
+    "schema_version" TEXT NOT NULL DEFAULT '1.0.0',
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "spk_profiles_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "candidates_email_key" ON "candidates"("email");
 
@@ -161,6 +178,12 @@ CREATE UNIQUE INDEX "roadmap_items_skill_gap_id_key" ON "roadmap_items"("skill_g
 -- CreateIndex
 CREATE INDEX "roadmap_items_roadmap_id_idx" ON "roadmap_items"("roadmap_id");
 
+-- CreateIndex
+CREATE UNIQUE INDEX "spk_profiles_interview_id_key" ON "spk_profiles"("interview_id");
+
+-- CreateIndex
+CREATE INDEX "spk_profiles_interview_id_idx" ON "spk_profiles"("interview_id");
+
 -- AddForeignKey
 ALTER TABLE "interview_sessions" ADD CONSTRAINT "interview_sessions_candidate_id_fkey" FOREIGN KEY ("candidate_id") REFERENCES "candidates"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
@@ -184,3 +207,6 @@ ALTER TABLE "roadmap_items" ADD CONSTRAINT "roadmap_items_roadmap_id_fkey" FOREI
 
 -- AddForeignKey
 ALTER TABLE "roadmap_items" ADD CONSTRAINT "roadmap_items_skill_gap_id_fkey" FOREIGN KEY ("skill_gap_id") REFERENCES "skill_gaps"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "spk_profiles" ADD CONSTRAINT "spk_profiles_interview_id_fkey" FOREIGN KEY ("interview_id") REFERENCES "interview_sessions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
