@@ -8,11 +8,18 @@ import { LlmService } from '../llm/llm.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { buildDiscrepancyPrompt } from './discrepancy.prompts';
 import {
+  DiscrepancyItem,
   DiscrepancyResponseSchema,
   DiscrepancyStatusResponseSchema,
   DiscrepancyStatusUpdate,
   DiscrepancyStatusUpdateSchema,
 } from '@echogrow/shared';
+
+const SEVERITY_MAP = {
+  low: 'LOW',
+  medium: 'MEDIUM',
+  high: 'HIGH',
+} as const;
 
 @Injectable()
 export class DiscrepancyService {
@@ -36,7 +43,7 @@ export class DiscrepancyService {
    */
   async saveDiscrepancies(
     scorecardId: string,
-    discrepancies: any[],
+    discrepancies: DiscrepancyItem[],
   ): Promise<void> {
     const deleted = await this.prisma.discrepancy.deleteMany({
       where: { scorecardId, status: 'PENDING' },
@@ -61,10 +68,13 @@ export class DiscrepancyService {
         interviewQuote: d.interviewQuote,
         confidence: d.confidence,
         status: 'PENDING',
+        severity: SEVERITY_MAP[d.severity as keyof typeof SEVERITY_MAP],
       })),
     });
 
-    this.logger.log(`[Discrepancy] Saved ${discrepancies.length} new discrepancies.`);
+    this.logger.log(
+      `[Discrepancy] Saved ${discrepancies.length} new discrepancies.`,
+    );
   }
 
   async updateStatus(id: string, body: DiscrepancyStatusUpdate) {

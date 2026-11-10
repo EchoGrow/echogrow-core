@@ -1,5 +1,11 @@
 import { z } from 'zod';
 
+export const DiscrepancySeveritySchema = z.enum([
+  'low',
+  'medium',
+  'high',
+]);
+
 export const DiscrepancyItemSchema = z.object({
   field: z.string(),
   cvSays: z.string(),
@@ -7,6 +13,7 @@ export const DiscrepancyItemSchema = z.object({
   cvQuote: z.string(),
   interviewQuote: z.string(),
   confidence: z.number().min(0).max(1),
+  severity: DiscrepancySeveritySchema,
   action: z.literal('flag_for_human_review'),
 });
 
@@ -38,3 +45,4 @@ export type DiscrepancyRecord = z.infer<typeof DiscrepancyRecordSchema>;
 export type Discrepancy = z.infer<typeof DiscrepancySchema>;
 export type DiscrepancyStatusUpdate = z.infer<typeof DiscrepancyStatusUpdateSchema>;
 export type DiscrepancyStatusResponse = z.infer<typeof DiscrepancyStatusResponseSchema>;
+export type DiscrepancySeverity = z.infer<typeof DiscrepancySeveritySchema>;

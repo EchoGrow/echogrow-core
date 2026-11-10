@@ -18,6 +18,10 @@ Each discrepancy must include:
 - "interviewSays": what the candidate said
 - "cvQuote": a verbatim excerpt from the resume
 - "interviewQuote": a verbatim quote from the transcript
+- "severity": the severity level of the discrepancy, classified strictly as one of:
+  - "high": Critical contradictions affecting core role, major experience gaps, or title discrepancies (e.g., claiming to be a Team Lead vs. Individual Contributor).
+  - "medium": Moderate contradictions like team size differences, sub-skills, or minor timeline variations.
+  - "low": Minor details or slight numerical variations that don't alter the overall candidate profile (e.g., team size of 4 vs 5).
 - "confidence": a float between 0.0 and 1.0
 - "action": always "flag_for_human_review"
 

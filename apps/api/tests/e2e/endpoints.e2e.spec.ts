@@ -266,6 +266,7 @@ describe('E2E: REST endpoints (no LLM calls)', () => {
         expect(d.confidence).toBe(0.9);
         expect(d.status).toBe('pending');
         expect(d.action).toBe('flag_for_human_review');
+        expect(['low', 'medium', 'high']).toContain(d.severity);
       }
     });
   });
