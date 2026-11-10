@@ -478,6 +478,7 @@ export class InterviewsService {
             ] || 'pending',
           action: 'flag_for_human_review' as const,
           severity: discrepancy.severity.toLowerCase(),
+          reviewerNotes: discrepancy.reviewerNotes,
         }),
       ),
     };

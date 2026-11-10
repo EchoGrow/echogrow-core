@@ -100,6 +100,7 @@ export class DiscrepancyService {
       data: {
         status: parsed.data.status.toUpperCase() as 'CONFIRMED' | 'DISMISSED',
         reviewedAt: new Date(),
+        reviewerNotes: parsed.data.reviewerNotes,
       },
     });
 

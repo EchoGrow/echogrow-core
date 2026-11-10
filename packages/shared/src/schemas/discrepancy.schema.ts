@@ -20,6 +20,7 @@ export const DiscrepancyItemSchema = z.object({
 export const DiscrepancyRecordSchema = DiscrepancyItemSchema.extend({
   id: z.string().min(1),
   status: z.enum(['pending', 'confirmed', 'dismissed']),
+  reviewerNotes: z.string().max(1000).nullable(),
 });
 
 export const DiscrepancyResponseSchema = z.object({
@@ -31,6 +32,7 @@ export const DiscrepancySchema = z.object({
 });
 
 export const DiscrepancyStatusUpdateSchema = z.object({
+  reviewerNotes: z.string().max(1000).optional(),
   status: z.enum(['confirmed', 'dismissed']),
 });
 
@@ -38,6 +40,7 @@ export const DiscrepancyStatusResponseSchema = z.object({
   id: z.string(),
   status: z.enum(['CONFIRMED', 'DISMISSED']),
   reviewedAt: z.date(),
+  reviewerNotes: z.string().max(1000).nullable(),
 });
 
 export type DiscrepancyItem = z.infer<typeof DiscrepancyItemSchema>;

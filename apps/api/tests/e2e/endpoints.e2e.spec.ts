@@ -290,9 +290,35 @@ describe('E2E: REST endpoints (no LLM calls)', () => {
       expect(body.status).toBe('CONFIRMED');
       expect(body.reviewedAt).toBeTruthy();
 
-      const db = await prisma.discrepancy.findUnique({ where: { id: discrepancyIds[0] } });
+      const db = await prisma.discrepancy.findUnique({
+        where: { id: discrepancyIds[0] },
+      });
       expect(db?.status).toBe('CONFIRMED');
       expect(db?.reviewedAt).toBeTruthy();
+    });
+
+    it('saves reviewer notes when confirming a discrepancy', async () => {
+      const { discrepancyIds } = await setup();
+
+      const reviewerNotes = 'Candidate admitted this in a follow-up call.';
+
+      const { body } = await api()
+        .patch(`/discrepancies/${discrepancyIds[0]}`)
+        .send({
+          status: 'confirmed',
+          reviewerNotes,
+        })
+        .expect(200);
+
+      expect(body.status).toBe('CONFIRMED');
+      expect(body.reviewerNotes).toBe(reviewerNotes);
+
+      const db = await prisma.discrepancy.findUnique({
+        where: { id: discrepancyIds[0] },
+      });
+
+      expect(db?.status).toBe('CONFIRMED');
+      expect(db?.reviewerNotes).toBe(reviewerNotes);
     });
 
     it('dismisses a discrepancy', async () => {
