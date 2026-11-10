@@ -1,5 +1,19 @@
 import { z } from 'zod';
 
+// Interview status (matches Prisma enum)
+export const InterviewStatusSchema = z.enum([
+  'QUEUED',
+  'PROCESSING',
+  'SCORED',
+  'FLAGGED',
+  'NEEDS_REVIEW',
+  'COMPLETED',
+  'FAILED',
+  'REJECTED',
+]);
+
+export type InterviewStatus = z.infer<typeof InterviewStatusSchema>;
+
 // Single Upload
 export const CreateInterviewSchema = z.object({
   candidateName: z.string().min(2, 'Name must be at least 2 characters'),
@@ -11,11 +25,6 @@ export const CreateInterviewSchema = z.object({
 export type CreateInterviewDto = z.infer<typeof CreateInterviewSchema>;
 
 // Bulk Upload
-
-/**
- * Metadata for one candidate in a bulk upload.
- * Files are matched by `transcriptFileName` and `resumeFileName`.
- */
 export const BulkUploadCandidateSchema = z.object({
   candidateName: z.string().min(2, 'Name must be at least 2 characters'),
   candidateEmail: z.string().email('Invalid email address'),
@@ -32,9 +41,6 @@ export const BulkUploadMetadataSchema = z
 
 export type BulkUploadMetadata = z.infer<typeof BulkUploadMetadataSchema>;
 
-/**
- * One result entry per candidate (success or failure).
- */
 export const BulkUploadResultSchema = z.object({
   candidateName: z.string(),
   candidateEmail: z.string(),
@@ -45,10 +51,6 @@ export const BulkUploadResultSchema = z.object({
 
 export type BulkUploadResult = z.infer<typeof BulkUploadResultSchema>;
 
-/**
- * Files that were rejected before processing (e.g. too large, empty).
- * These are reported separately from per-candidate errors.
- */
 export const RejectedFileSchema = z.object({
   filename: z.string(),
   reason: z.string(),

@@ -18,13 +18,14 @@ export const EvaluationSchema = z.object({
   overallConfidence: z.number().min(0).max(1),
 });
 
-// Time saved breakdown (dynamic, based on transcript length, CV length, discrepancies, low-score dimensions)
 export const TimeSavedSchema = z.object({
   manualMinutes: z.number().min(0),
   echoGrowSeconds: z.number().min(0),
   savedMinutes: z.number().min(0),
   savedSeconds: z.number().min(0),
 });
+
+export const SpkStatusSchema = z.enum(['pending', 'building', 'ready', 'failed']);
 
 export const ScorecardSchema = z.union([
   z.object({
@@ -35,8 +36,11 @@ export const ScorecardSchema = z.union([
     dimensions: z.array(DimensionSchema),
     overallConfidence: z.number().min(0).max(1),
     pendingDiscrepancies: z.number().int().min(0),
+    totalDiscrepancies: z.number().int().min(0),
     skillGaps: z.number().int().min(0),
     timeSaved: TimeSavedSchema.optional(),
+    spkStatus: SpkStatusSchema,
+    spkError: z.string().nullable(),
   }),
   z.object({
     status: z.literal('needs_review'),
@@ -54,9 +58,26 @@ export const ScorecardSchema = z.union([
     candidateName: z.string().min(1),
     message: z.string(),
   }),
+  z.object({
+    status: z.literal('processing'),
+    interviewId: z.string().min(1),
+    candidateName: z.string().min(1),
+    progress: z.object({
+      isScored: z.boolean(),
+      isVerified: z.boolean(),
+      isPlanned: z.boolean(),
+    }),
+  }),
+  z.object({
+    status: z.literal('failed'),
+    interviewId: z.string().min(1),
+    candidateName: z.string().min(1),
+    message: z.string(),
+  }),
 ]);
 
 export type Dimension = z.infer<typeof DimensionSchema>;
 export type Evaluation = z.infer<typeof EvaluationSchema>;
 export type TimeSaved = z.infer<typeof TimeSavedSchema>;
+export type SpkStatus = z.infer<typeof SpkStatusSchema>;
 export type Scorecard = z.infer<typeof ScorecardSchema>;
