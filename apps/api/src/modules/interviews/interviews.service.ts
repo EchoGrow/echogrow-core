@@ -31,9 +31,7 @@ const DISCREPANCY_STATUS_MAP = {
   DISMISSED: 'dismissed',
 } as const;
 
-// Per-file size cap enforced inside the service so we can reject files
-// individually instead of failing the entire request.
-const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2 MB
+const MAX_FILE_BYTES = 2 * 1024 * 1024;
 
 @Injectable()
 export class InterviewsService {
@@ -62,10 +60,6 @@ export class InterviewsService {
     return { interviewId, status: 'queued' };
   }
 
-  /**
-   * Shared helper used by both single upload and bulk upload.
-   * Creates candidate (if needed), creates session, enqueues the job.
-   */
   private async createInterviewAndEnqueue(
     candidateName: string,
     candidateEmail: string,
@@ -95,6 +89,7 @@ export class InterviewsService {
         isScored: false,
         isVerified: false,
         isPlanned: false,
+        spkStatus: 'pending',
       },
     });
 
@@ -111,16 +106,6 @@ export class InterviewsService {
     return session.id;
   }
 
-  /**
-   * Bulk upload: accepts N files + a metadata JSON array describing
-   * which transcript/resume belongs to which candidate.
-   *
-   * - Files larger than MAX_FILE_BYTES are rejected individually (not the whole request).
-   * - Empty files are rejected individually.
-   * - Missing files or short content fail only that candidate.
-   * - Never throws after metadata validation succeeds; per-candidate errors
-   *   are returned in `results`, file-level rejections in `rejectedFiles`.
-   */
   async bulkUpload(files: Express.Multer.File[], metadataRaw: unknown) {
     const parsed = BulkUploadMetadataSchema.safeParse(metadataRaw);
     if (!parsed.success) {
@@ -134,7 +119,6 @@ export class InterviewsService {
 
     const metadata = parsed.data;
 
-    // ── 1. File-level validation (individually rejectable) ──
     const rejectedFiles: { filename: string; reason: string; sizeBytes: number }[] = [];
     const acceptedFiles: Express.Multer.File[] = [];
 
@@ -145,7 +129,6 @@ export class InterviewsService {
           reason: 'File is empty (0 bytes).',
           sizeBytes: 0,
         });
-        this.logger.warn(`[Bulk] Rejected empty file: ${file.originalname}`);
         continue;
       }
 
@@ -157,23 +140,18 @@ export class InterviewsService {
           reason: `File is too large (${sizeMb} MB). Maximum is ${limitMb} MB per file.`,
           sizeBytes: file.size,
         });
-        this.logger.warn(
-          `[Bulk] Rejected oversized file: ${file.originalname} (${sizeMb} MB)`,
-        );
         continue;
       }
 
       acceptedFiles.push(file);
     }
 
-    // ── 2. Build lookup map (case-insensitive) ──
     const fileMap = new Map<string, Express.Multer.File>();
     for (const file of acceptedFiles) {
       fileMap.set(file.originalname, file);
       fileMap.set(file.originalname.toLowerCase(), file);
     }
 
-    // ── 3. Process each candidate ──
     const results: BulkUploadResult[] = [];
 
     for (const candidate of metadata) {
@@ -181,7 +159,6 @@ export class InterviewsService {
         const transcriptFile =
           fileMap.get(candidate.transcriptFileName) ??
           fileMap.get(candidate.transcriptFileName.toLowerCase());
-
         if (!transcriptFile) {
           results.push({
             candidateName: candidate.candidateName,
@@ -195,7 +172,6 @@ export class InterviewsService {
         const resumeFile =
           fileMap.get(candidate.resumeFileName) ??
           fileMap.get(candidate.resumeFileName.toLowerCase());
-
         if (!resumeFile) {
           results.push({
             candidateName: candidate.candidateName,
@@ -242,8 +218,6 @@ export class InterviewsService {
           status: 'queued',
           interviewId,
         });
-
-        this.logger.log(`[Bulk] Queued ${candidate.candidateEmail} → ${interviewId}`);
       } catch (cause: any) {
         results.push({
           candidateName: candidate.candidateName,
@@ -251,18 +225,11 @@ export class InterviewsService {
           status: 'error',
           error: cause instanceof Error ? cause.message : 'Unknown error',
         });
-        this.logger.warn(
-          `[Bulk] Failed for ${candidate.candidateEmail}: ${cause.message}`,
-        );
       }
     }
 
     const queued = results.filter((r) => r.status === 'queued').length;
     const failed = results.filter((r) => r.status === 'error').length;
-
-    this.logger.log(
-      `[Bulk] Summary: ${queued} queued, ${failed} failed, ${rejectedFiles.length} files rejected (total ${results.length})`,
-    );
 
     return {
       results,
@@ -344,13 +311,14 @@ export class InterviewsService {
       where: { scorecardId: session.scorecard.id, status: 'PENDING' },
     });
 
+    const totalDiscrepancies = session.scorecard.discrepancies.length;
+
     const skillGaps = session.scorecard.roadmap
       ? await this.prisma.roadmapItem.count({
           where: { roadmapId: session.scorecard.roadmap.id },
         })
       : 0;
 
-    const totalDiscrepancies = session.scorecard.discrepancies.length;
     const weakDimensionsCount = session.scorecard.dimensions.filter((d) => d.score <= 2).length;
 
     let timeSaved:
@@ -381,6 +349,7 @@ export class InterviewsService {
       timeSaved = this.computeTimeSavedFallback(
         {
           createdAt: session.createdAt,
+          completedAt: (session as any).completedAt ?? session.updatedAt,
           updatedAt: session.updatedAt,
           transcript: session.transcript,
           resume: session.resume,
@@ -407,8 +376,12 @@ export class InterviewsService {
       }),
       overallConfidence: session.scorecard.confidence ?? 0,
       pendingDiscrepancies,
+      totalDiscrepancies,
       skillGaps,
       timeSaved,
+      // Issue 1 fix: expose SPK build status to the frontend
+      spkStatus: (session as any).spkStatus ?? 'pending',
+      spkError: (session as any).spkError ?? null,
     };
 
     return ScorecardSchema.parse(response);
@@ -434,6 +407,8 @@ export class InterviewsService {
         isScored: false,
         isVerified: false,
         isPlanned: false,
+        spkStatus: 'pending',
+        spkError: null,
       },
     });
 
@@ -566,7 +541,13 @@ export class InterviewsService {
   }
 
   private computeTimeSavedFallback(
-    session: { createdAt: Date; updatedAt: Date; transcript: string; resume: string },
+    session: {
+      createdAt: Date;
+      completedAt?: Date;
+      updatedAt: Date;
+      transcript: string;
+      resume: string;
+    },
     discrepanciesCount: number,
     weakDimensionsCount: number,
   ) {
@@ -589,9 +570,11 @@ export class InterviewsService {
       discrepanciesCount * C.MINUTES_PER_DISCREPANCY +
       weakDimensionsCount * C.MINUTES_PER_WEAK_DIMENSION;
 
+    // Issue 4 fix: prefer completedAt over updatedAt
+    const endTime = session.completedAt ?? session.updatedAt;
     const rawSeconds = Math.max(
       0,
-      (session.updatedAt.getTime() - session.createdAt.getTime()) / 1000,
+      (endTime.getTime() - session.createdAt.getTime()) / 1000,
     );
     const echoGrowSeconds = Math.min(rawSeconds, C.ECHOGROW_CAP_SECONDS);
     const savedSeconds = Math.max(0, manualMinutes * 60 - echoGrowSeconds);

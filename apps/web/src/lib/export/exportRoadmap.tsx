@@ -1,5 +1,4 @@
 import { pdf } from '@react-pdf/renderer';
-import React from 'react';
 import { RoadmapPDF } from './RoadmapPDF';
 import { validateRoadmapForExport, type RoadmapResponse } from '../api';
 
@@ -29,12 +28,12 @@ export async function downloadRoadmapPDF(
 
   try {
     const blob = await pdf(
-      React.createElement(RoadmapPDF, {
-        candidateName,
-        interviewDate,
-        data,
-        sessionId,
-      }),
+      <RoadmapPDF
+        candidateName={candidateName}
+        interviewDate={interviewDate}
+        data={data}
+        sessionId={sessionId}
+      />,
     ).toBlob();
 
     const url = URL.createObjectURL(blob);
@@ -72,7 +71,9 @@ export async function copyRoadmapMarkdown(
 
   const { gaps, roadmap } = data;
   const generatedAt = new Date();
-  const docId = sessionId ? sessionId.slice(-8).toUpperCase() : generatedAt.getTime().toString(36).toUpperCase().slice(-8);
+  const docId = sessionId
+    ? sessionId.slice(-8).toUpperCase()
+    : generatedAt.getTime().toString(36).toUpperCase().slice(-8);
 
   const lines: string[] = [
     `# Personalized Upskilling Roadmap`,
@@ -147,7 +148,9 @@ export function downloadRoadmapJSON(
   }
 
   const generatedAt = new Date();
-  const docId = sessionId ? sessionId.slice(-8).toUpperCase() : generatedAt.getTime().toString(36).toUpperCase().slice(-8);
+  const docId = sessionId
+    ? sessionId.slice(-8).toUpperCase()
+    : generatedAt.getTime().toString(36).toUpperCase().slice(-8);
 
   const payload = {
     metadata: {

@@ -29,12 +29,26 @@ export const RoadmapResponseSchema = z.object({
   roadmap: z.array(RoadmapItemSchema),
 });
 
-// Types
+// Whitelist entry type — now supports optional aliases.
+export const WhitelistEntrySchema = z.object({
+  category: z.string().min(1),
+  skillName: z.string().min(1),
+  aliases: z.array(z.string().min(1)).optional(),
+  resources: z.array(
+    z.object({
+      resourceType: z.string().min(1),
+      resourceTitle: z.string().min(1),
+      resourceUrl: z.string().url(),
+    }),
+  ),
+});
+
 export type RoadmapItemGeneration = z.infer<typeof RoadmapItemGenerationSchema>;
 export type RoadmapGeneration = z.infer<typeof RoadmapGenerationSchema>;
 export type SkillGap = z.infer<typeof SkillGapSchema>;
 export type RoadmapItem = z.infer<typeof RoadmapItemSchema>;
 export type RoadmapResponse = z.infer<typeof RoadmapResponseSchema>;
+export type WhitelistEntry = z.infer<typeof WhitelistEntrySchema>;
 
 // Backward compatibility aliases
 export const RoadmapSchema = RoadmapGenerationSchema;

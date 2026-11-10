@@ -8,9 +8,6 @@ interface DimensionWithEvidence {
   reason?: string;
 }
 
-/**
- * Schema لاستخراج الفجوات المهارية (Prompt 1).
- */
 export const SkillExtractionSchema = z.object({
   skills: z.array(z.string().min(1)),
 });
@@ -18,9 +15,46 @@ export const SkillExtractionSchema = z.object({
 export type SkillExtraction = z.infer<typeof SkillExtractionSchema>;
 
 /**
- * Prompt 1: استخراج الفجوات المهارية من دفعة أدلة + النص الكامل للمقابلة.
- * يُستخدم في Multi-Pass Extraction.
+ * Schema for LLM semantic deduplication.
  */
+export const SkillDedupeSchema = z.object({
+  canonical_skills: z.array(z.string().min(1)),
+});
+
+export type SkillDedupe = z.infer<typeof SkillDedupeSchema>;
+
+/**
+ * Prompt used by `dedupeSkillsSemantically` to merge semantically overlapping
+ * skills (e.g. "EXPLAIN ANALYZE" and "PostgreSQL query optimization").
+ */
+export function buildSkillDedupePrompt(skills: string[]): string {
+  return `You are a skill taxonomy expert. The following skills were extracted
+from a technical interview. Some of them are SEMANTIC DUPLICATES — they refer
+to the same concept under different names.
+
+Examples of duplicates:
+- "EXPLAIN ANALYZE" and "Database Query Optimization" and "SQL Indexing and Query Optimization" → same concept
+- "Dockerfile" and "Docker Compose" and "Containerization" → same concept
+- "K8s" and "Kubernetes" → same concept
+- "OAuth" and "OIDC" and "JWT" → same concept
+
+Your task: merge semantically duplicate skills into ONE canonical name per concept.
+
+### RULES:
+1. Prefer the most general, industry-standard name.
+2. Preserve the original casing of the chosen canonical name.
+3. NEVER invent new skills — only merge or select from the input.
+4. If two skills are clearly NOT the same concept, keep both.
+5. Return AT MOST 5 canonical skills (pick the most important).
+6. Return strict JSON: { "canonical_skills": string[] }
+
+### INPUT SKILLS:
+${skills.map((s, i) => `${i + 1}. ${s}`).join('\n')}
+
+Return ONLY valid JSON.
+`;
+}
+
 export function buildSkillExtractionPrompt(
   evidenceBatch: { dimension: string; quote: string; score?: number; reason?: string }[],
   transcript?: string,
@@ -53,14 +87,6 @@ ${transcriptSection}
 5. If every dimension in the batch scores 4 or higher and nothing is admitted, return an empty list.
 6. Return a JSON object with a single key "skills" (array of strings).
 
-### EXAMPLE:
-Evidence: "I don't know Kubernetes or Terraform. I have never used GraphQL."
-Output: { "skills": ["Kubernetes", "Terraform", "GraphQL"] }
-
-### EXAMPLE (empty):
-Evidence: Score 5/5, "I have strong experience with React and TypeScript."
-Output: { "skills": [] }
-
 ### CRITICAL RULES:
 - NEVER use dimension names as skills.
 - Extract EVERY supported skill. Do not skip any.
@@ -68,9 +94,6 @@ Output: { "skills": [] }
 `;
 }
 
-/**
- * Prompt 2: توليد Roadmap من قائمة الفجوات المدمجة.
- */
 export function buildRoadmapFromGapsPrompt(
   uniqueSkills: string[],
   evidenceContext: string,
@@ -101,7 +124,7 @@ ${resourcesText}
 1. For each skill gap, create **ONE week** of learning.
 2. Each week must have:
    - "week": an integer (1, 2, 3, ...) representing the sequential week number.
-   - "task": a clear, actionable learning task (e.g., "Master Kubernetes fundamentals and deployments").
+   - "task": a clear, actionable learning task.
    - "resourceUrl": a URL **selected EXACTLY** from the approved list above.
    - "skillName": the specific skill being addressed.
 3. Return a JSON object with:
@@ -110,23 +133,11 @@ ${resourcesText}
 
 ### CRITICAL RULES:
 - **DO NOT invent URLs.** You MUST use only the URLs from the approved list.
-- **Match each skill to the closest skill name in the approved list** (e.g. "K8s" → "Kubernetes", "Postgres" → "PostgreSQL") and use that skill's URL.
+- **Match each skill to the closest skill name in the approved list** and use that skill's URL.
 - **FALLBACK RULE:** If a skill is NOT in the approved list, set "resourceUrl" to:
   "https://www.google.com/search?q=<skill_name>+tutorial"
   and add "(Search for a vetted resource)" to the task description.
 - The roadmap must have exactly ONE week per skill gap.
 - Return ONLY valid JSON.
-
-### EXAMPLE:
-Skills: ["Kubernetes", "Terraform", "GraphQL"]
-Output:
-{
-  "gaps": ["Kubernetes", "Terraform", "GraphQL"],
-  "roadmap": [
-    { "week": 1, "task": "Learn Kubernetes fundamentals and deployments", "resourceUrl": "https://kubernetes.io/docs/home/", "skillName": "Kubernetes" },
-    { "week": 2, "task": "Learn Terraform and infrastructure as code", "resourceUrl": "https://developer.hashicorp.com/terraform/docs", "skillName": "Terraform" },
-    { "week": 3, "task": "Learn GraphQL schema design and resolvers", "resourceUrl": "https://graphql.org/learn/", "skillName": "GraphQL" }
-  ]
-}
 `;
 }
