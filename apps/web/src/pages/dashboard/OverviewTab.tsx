@@ -23,14 +23,23 @@ import {
   Download,
   Database,
   CheckCircle2 as CheckCircleIcon,
+  Loader2,
 } from 'lucide-react';
 import { SEO } from '../../components/SEO';
 import { Alert, Button, Card, toast } from '../../components/ui';
 import { ReviewBanner } from '../../components/ui/ReviewBanner';
 import { ProcessingState } from '../../components/dashboard/ProcessingState';
 import { useScorecard } from '../../lib/scorecard/useScorecard';
-import { forceEvaluation, getSpkExport, rebuildSpkProfile } from '../../lib/api';
-import type { ScorecardDimension, TimeSavedBreakdown } from '../../lib/api';
+import {
+  forceEvaluation,
+  getSpkExport,
+  rebuildSpkProfile,
+} from '../../lib/api';
+import type {
+  ScorecardDimension,
+  TimeSavedBreakdown,
+  SpkStatus,
+} from '../../lib/api';
 import { cn } from '../../lib/cn';
 import { fadeUp, scaleIn, staggerContainer } from '../../lib/animations';
 
@@ -61,7 +70,8 @@ const TONES: Record<
     label: 'Below the bar',
     gradient: 'from-danger-500/[0.08] via-transparent to-transparent',
     ring: 'ring-danger-500/20',
-    iconBg: 'bg-danger-50 text-danger-600 dark:bg-danger-500/15 dark:text-danger-500 ring-danger-500/20',
+    iconBg:
+      'bg-danger-50 text-danger-600 dark:bg-danger-500/15 dark:text-danger-500 ring-danger-500/20',
   },
   warning: {
     text: 'text-warning-700 dark:text-warning-500',
@@ -72,7 +82,8 @@ const TONES: Record<
     label: 'On the bar',
     gradient: 'from-warning-500/[0.08] via-transparent to-transparent',
     ring: 'ring-warning-500/20',
-    iconBg: 'bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-warning-500 ring-warning-500/20',
+    iconBg:
+      'bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-warning-500 ring-warning-500/20',
   },
   success: {
     text: 'text-success-700 dark:text-success-500',
@@ -83,7 +94,8 @@ const TONES: Record<
     label: 'Above the bar',
     gradient: 'from-success-500/[0.08] via-transparent to-transparent',
     ring: 'ring-success-500/20',
-    iconBg: 'bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500 ring-success-500/20',
+    iconBg:
+      'bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500 ring-success-500/20',
   },
   neutral: {
     text: 'text-fg-strong',
@@ -94,7 +106,8 @@ const TONES: Record<
     label: 'Neutral',
     gradient: 'from-accent-500/[0.06] via-transparent to-transparent',
     ring: 'ring-accent-500/20',
-    iconBg: 'bg-accent-500/15 text-accent-700 dark:text-accent-300 ring-accent-500/20',
+    iconBg:
+      'bg-accent-500/15 text-accent-700 dark:text-accent-300 ring-accent-500/20',
   },
 };
 
@@ -108,12 +121,19 @@ function formatDate(value?: string): string {
   if (!value) return 'Date unavailable';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'Date unavailable';
-  return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).format(date);
+  return new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(date);
 }
 
 function averageScore(dimensions: ScorecardDimension[]): number {
   if (dimensions.length === 0) return 0;
-  return dimensions.reduce((sum, dimension) => sum + dimension.score, 0) / dimensions.length;
+  return (
+    dimensions.reduce((sum, dimension) => sum + dimension.score, 0) /
+    dimensions.length
+  );
 }
 
 function showCount(value?: number): string {
@@ -176,30 +196,67 @@ function PageHeading({
       variants={fadeUp}
       className="relative overflow-hidden rounded-2xl border border-line bg-gradient-to-br from-accent-50 via-surface-card to-surface-card p-6 sm:p-8 dark:from-accent-500/5 dark:via-surface-card dark:to-surface-card"
     >
-      <svg className="absolute inset-0 h-full w-full opacity-[0.04] dark:opacity-[0.06]" aria-hidden="true">
+      <svg
+        className="absolute inset-0 h-full w-full opacity-[0.04] dark:opacity-[0.06]"
+        aria-hidden="true"
+      >
         <defs>
-          <pattern id="overview-grid" width="24" height="24" patternUnits="userSpaceOnUse">
-            <path d="M 24 0 L 0 0 0 24" fill="none" stroke="currentColor" strokeWidth="1" />
+          <pattern
+            id="overview-grid"
+            width="24"
+            height="24"
+            patternUnits="userSpaceOnUse"
+          >
+            <path
+              d="M 24 0 L 0 0 0 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1"
+            />
           </pattern>
         </defs>
         <rect width="100%" height="100%" fill="url(#overview-grid)" />
       </svg>
 
-      <div className="absolute -right-20 -top-20 h-56 w-56 rounded-full bg-accent-500/10 blur-3xl" aria-hidden="true" />
-      <div className="absolute -bottom-20 -left-20 h-56 w-56 rounded-full bg-accent-500/5 blur-3xl" aria-hidden="true" />
-      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-accent-500 to-transparent" aria-hidden="true" />
+      <div
+        className="absolute -right-20 -top-20 h-56 w-56 rounded-full bg-accent-500/10 blur-3xl"
+        aria-hidden="true"
+      />
+      <div
+        className="absolute -bottom-20 -left-20 h-56 w-56 rounded-full bg-accent-500/5 blur-3xl"
+        aria-hidden="true"
+      />
+      <div
+        className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-accent-500 to-transparent"
+        aria-hidden="true"
+      />
 
       <div className="relative flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-start gap-4 min-w-0 flex-1">
           <motion.div
             initial={{ scale: 0, rotate: -180 }}
             animate={{ scale: 1, rotate: 0 }}
-            transition={{ type: 'spring', stiffness: 200, damping: 15, delay: 0.2 }}
+            transition={{
+              type: 'spring',
+              stiffness: 200,
+              damping: 15,
+              delay: 0.2,
+            }}
             className="relative flex h-14 w-14 sm:h-16 sm:w-16 shrink-0 items-center justify-center rounded-2xl border-2 border-accent-500/30 bg-surface-card shadow-lg"
           >
-            <User className="h-5 w-5 text-accent-600 dark:text-accent-400" strokeWidth={2.5} />
+            <User
+              className="h-5 w-5 text-accent-600 dark:text-accent-400"
+              strokeWidth={2.5}
+            />
             <div className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-accent-500 to-accent-700 text-[9px] font-bold text-white shadow-sm ring-2 ring-surface-card">
-              {candidateName.trim().split(/\s+/).slice(0, 2).map((p) => p[0]).join('').toUpperCase().slice(0, 2)}
+              {candidateName
+                .trim()
+                .split(/\s+/)
+                .slice(0, 2)
+                .map((p) => p[0])
+                .join('')
+                .toUpperCase()
+                .slice(0, 2)}
             </div>
           </motion.div>
 
@@ -215,7 +272,9 @@ function PageHeading({
                 <Calendar className="h-3.5 w-3.5" />
                 {formatDate(interviewDate)}
               </span>
-              <span aria-hidden="true" className="hidden sm:inline">·</span>
+              <span aria-hidden="true" className="hidden sm:inline">
+                ·
+              </span>
               <button
                 type="button"
                 onClick={handleCopyId}
@@ -256,7 +315,13 @@ function PageHeading({
 // ============================================================
 // Average Score Card
 // ============================================================
-function AverageScoreCard({ average, count }: { average: number; count: number }) {
+function AverageScoreCard({
+  average,
+  count,
+}: {
+  average: number;
+  count: number;
+}) {
   const tone = TONES[toneFor(average)];
   const radius = 34;
   const circumference = 2 * Math.PI * radius;
@@ -275,8 +340,19 @@ function AverageScoreCard({ average, count }: { average: number; count: number }
 
         <div className="relative flex flex-1 items-center gap-5">
           <div className="relative h-[88px] w-[88px] shrink-0">
-            <svg viewBox="0 0 88 88" className="h-[88px] w-[88px] -rotate-90" aria-hidden="true">
-              <circle cx="44" cy="44" r={radius} fill="none" strokeWidth="7" className="stroke-chip" />
+            <svg
+              viewBox="0 0 88 88"
+              className="h-[88px] w-[88px] -rotate-90"
+              aria-hidden="true"
+            >
+              <circle
+                cx="44"
+                cy="44"
+                r={radius}
+                fill="none"
+                strokeWidth="7"
+                className="stroke-chip"
+              />
               <motion.circle
                 cx="44"
                 cy="44"
@@ -309,7 +385,9 @@ function AverageScoreCard({ average, count }: { average: number; count: number }
               <span className="text-2xl font-bold tabular-nums leading-none text-fg-strong">
                 {average.toFixed(1)}
               </span>
-              <span className="text-xs font-medium text-fg-muted">/ {MAX_SCORE}</span>
+              <span className="text-xs font-medium text-fg-muted">
+                / {MAX_SCORE}
+              </span>
             </div>
             <span
               className={cn(
@@ -327,7 +405,9 @@ function AverageScoreCard({ average, count }: { average: number; count: number }
 
         <div className="relative mt-4 flex items-center justify-between border-t border-line/70 pt-3 text-[11px]">
           <span className="text-fg-muted">Averaged across</span>
-          <span className="font-semibold text-fg-strong">{count} dimensions</span>
+          <span className="font-semibold text-fg-strong">
+            {count} dimensions
+          </span>
         </div>
       </Card>
     </motion.div>
@@ -385,7 +465,9 @@ function StatCard({
         {value}
       </p>
 
-      <p className="relative mt-1 text-xs leading-relaxed text-fg-muted">{hint}</p>
+      <p className="relative mt-1 text-xs leading-relaxed text-fg-muted">
+        {hint}
+      </p>
 
       {href ? (
         <span className="relative mt-auto inline-flex items-center gap-1 pt-4 text-[11px] font-semibold text-accent-700 transition-colors group-hover:text-accent-800 dark:text-accent-300 dark:group-hover:text-accent-200">
@@ -428,9 +510,10 @@ function TimeSavedCard({ timeSaved }: { timeSaved?: TimeSavedBreakdown }) {
   };
 
   const manualSeconds = data.manualMinutes * 60;
-  const savedPercent = manualSeconds > 0
-    ? Math.min(100, Math.round((data.savedSeconds / manualSeconds) * 100))
-    : 0;
+  const savedPercent =
+    manualSeconds > 0
+      ? Math.min(100, Math.round((data.savedSeconds / manualSeconds) * 100))
+      : 0;
 
   return (
     <motion.div variants={fadeUp} className="h-full">
@@ -500,19 +583,138 @@ function TimeSavedCard({ timeSaved }: { timeSaved?: TimeSavedBreakdown }) {
 }
 
 // ============================================================
-// SPK Preview Card
+// SPK Preview Card (4 states + Retry button when failed)
 // ============================================================
 function SpkPreviewCard({
   dimensionsCount,
   discrepanciesFlagged,
   pendingDiscrepancies,
   skillGaps,
+  spkStatus,
+  spkError,
+  onRebuild,
+  isRebuilding,
 }: {
   dimensionsCount: number;
   discrepanciesFlagged: number;
   pendingDiscrepancies: number;
   skillGaps: number;
+  spkStatus: SpkStatus;
+  spkError: string | null;
+  onRebuild: () => void;
+  isRebuilding: boolean;
 }) {
+  // State 1: pending (SPK not started yet)
+  if (spkStatus === 'pending') {
+    return (
+      <motion.div variants={fadeUp}>
+        <Card className="group relative flex flex-col overflow-hidden p-5 shadow-sm ring-1 ring-line/60">
+          <div
+            className="pointer-events-none absolute inset-0 bg-gradient-to-br from-warning-500/[0.06] via-transparent to-transparent"
+            aria-hidden="true"
+          />
+          <div className="relative flex items-center gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-warning-50 text-warning-600 ring-1 ring-warning-500/20 dark:bg-warning-500/15 dark:text-warning-500">
+              <Loader2 className="h-4 w-4 animate-spin" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-fg-muted">
+                Agent David
+              </p>
+              <p className="mt-1 text-sm font-semibold text-fg-strong">
+                SPK build queued
+              </p>
+              <p className="text-[10px] text-fg-muted">
+                Waiting for the pipeline to start...
+              </p>
+            </div>
+          </div>
+        </Card>
+      </motion.div>
+    );
+  }
+
+  // State 2: building (SPK extraction in progress)
+  if (spkStatus === 'building') {
+    return (
+      <motion.div variants={fadeUp}>
+        <Card className="group relative flex flex-col overflow-hidden p-5 shadow-sm ring-1 ring-line/60">
+          <div
+            className="pointer-events-none absolute inset-0 bg-gradient-to-br from-accent-500/[0.06] via-transparent to-transparent"
+            aria-hidden="true"
+          />
+          <div className="relative flex items-center gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent-500/15 text-accent-700 ring-1 ring-accent-500/20 dark:text-accent-300">
+              <Loader2 className="h-4 w-4 animate-spin" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-fg-muted">
+                Agent David
+              </p>
+              <p className="mt-1 text-sm font-semibold text-fg-strong">
+                Building SPK profile
+              </p>
+              <p className="text-[10px] text-fg-muted">
+                Extracting metadata + verified skills...
+              </p>
+            </div>
+          </div>
+          <div className="relative mt-3 h-1.5 overflow-hidden rounded-full bg-chip">
+            <motion.div
+              className="h-full rounded-full bg-accent-500"
+              animate={{ x: ['-100%', '100%'] }}
+              transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
+              style={{ width: '50%' }}
+            />
+          </div>
+        </Card>
+      </motion.div>
+    );
+  }
+
+  // State 3: failed (SPK build failed) → show Retry button
+  if (spkStatus === 'failed') {
+    return (
+      <motion.div variants={fadeUp}>
+        <Card className="group relative flex flex-col overflow-hidden border-danger-500/30 bg-danger-50 p-5 shadow-sm ring-1 ring-danger-500/20 dark:bg-danger-500/10">
+          <div className="relative flex items-start gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-danger-500/15 text-danger-600 dark:text-danger-500">
+              <AlertCircle className="h-4 w-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-danger-700 dark:text-danger-500">
+                Agent David
+              </p>
+              <p className="mt-1 text-sm font-semibold text-danger-700 dark:text-danger-500">
+                SPK build failed
+              </p>
+              <p className="mt-1 text-[10px] leading-relaxed text-danger-700/80 dark:text-danger-500/80 line-clamp-2">
+                {spkError ?? 'LLM call failed after 3 attempts. Click Retry to rebuild.'}
+              </p>
+            </div>
+          </div>
+          <div className="relative mt-3 flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={onRebuild}
+              disabled={isRebuilding}
+            >
+              <RotateCcw
+                className={cn(
+                  'mr-1.5 h-3.5 w-3.5',
+                  isRebuilding && 'animate-spin',
+                )}
+              />
+              {isRebuilding ? 'Retrying...' : 'Retry SPK build'}
+            </Button>
+          </div>
+        </Card>
+      </motion.div>
+    );
+  }
+
+  // State 4: ready (SPK built successfully)
   const isApproved = pendingDiscrepancies === 0;
 
   return (
@@ -521,7 +723,9 @@ function SpkPreviewCard({
         <div
           className={cn(
             'pointer-events-none absolute inset-0 bg-gradient-to-br opacity-70 transition-opacity duration-300 group-hover:opacity-100',
-            isApproved ? 'from-success-500/[0.08] via-transparent to-transparent' : 'from-warning-500/[0.08] via-transparent to-transparent',
+            isApproved
+              ? 'from-success-500/[0.08] via-transparent to-transparent'
+              : 'from-warning-500/[0.08] via-transparent to-transparent',
           )}
           aria-hidden="true"
         />
@@ -531,7 +735,9 @@ function SpkPreviewCard({
             <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-fg-muted">
               Agent David
             </p>
-            <p className="mt-1 text-sm font-semibold text-fg-strong">SPK export ready</p>
+            <p className="mt-1 text-sm font-semibold text-fg-strong">
+              SPK export ready
+            </p>
           </div>
           <span
             aria-hidden="true"
@@ -548,17 +754,23 @@ function SpkPreviewCard({
 
         <div className="relative mt-4 flex items-center justify-between gap-3">
           <div className="flex flex-1 flex-col">
-            <span className="text-xl font-bold tabular-nums text-fg-strong">{dimensionsCount}</span>
+            <span className="text-xl font-bold tabular-nums text-fg-strong">
+              {dimensionsCount}
+            </span>
             <span className="text-[10px] text-fg-muted">Dimensions</span>
           </div>
           <div className="h-8 w-px bg-line" aria-hidden="true" />
           <div className="flex flex-1 flex-col">
-            <span className="text-xl font-bold tabular-nums text-fg-strong">{discrepanciesFlagged}</span>
+            <span className="text-xl font-bold tabular-nums text-fg-strong">
+              {discrepanciesFlagged}
+            </span>
             <span className="text-[10px] text-fg-muted">Flags</span>
           </div>
           <div className="h-8 w-px bg-line" aria-hidden="true" />
           <div className="flex flex-1 flex-col">
-            <span className="text-xl font-bold tabular-nums text-fg-strong">{skillGaps}</span>
+            <span className="text-xl font-bold tabular-nums text-fg-strong">
+              {skillGaps}
+            </span>
             <span className="text-[10px] text-fg-muted">Gaps</span>
           </div>
         </div>
@@ -586,25 +798,30 @@ function SpkPreviewCard({
 }
 
 // ============================================================
-// Download SPK JSON Button (with Rebuild fallback)
+// Download SPK Button (with Rebuild fallback when failed)
 // ============================================================
 function DownloadSpkButton({
   interviewId,
   candidateName,
   isCompleted,
+  spkStatus,
   onRebuild,
+  isRebuilding,
 }: {
   interviewId: string;
   candidateName: string;
   isCompleted: boolean;
-  onRebuild?: () => void;
+  spkStatus: SpkStatus;
+  onRebuild: () => void;
+  isRebuilding: boolean;
 }) {
   const [isExporting, setIsExporting] = useState(false);
 
   const handleExport = async () => {
     if (!isCompleted) {
       toast.error('SPK export unavailable', {
-        description: 'This interview is not completed yet. Wait for the analysis to finish.',
+        description:
+          'This interview is not completed yet. Wait for the analysis to finish.',
       });
       return;
     }
@@ -623,7 +840,9 @@ function DownloadSpkButton({
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-      toast.success('SPK JSON downloaded', { description: 'Ready for Agent David.' });
+      toast.success('SPK JSON downloaded', {
+        description: 'Ready for Agent David.',
+      });
     } catch (cause) {
       toast.error('Failed to export SPK', {
         description: cause instanceof Error ? cause.message : 'Unknown error',
@@ -633,13 +852,47 @@ function DownloadSpkButton({
     }
   };
 
+  // pending / building → disabled "building..." state
+  if (spkStatus === 'pending' || spkStatus === 'building') {
+    return (
+      <Button
+        variant="secondary"
+        size="sm"
+        disabled
+        className="whitespace-nowrap"
+        title="SPK is being built"
+      >
+        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+        SPK building...
+      </Button>
+    );
+  }
+
+  // failed → Retry button (rebuild is the way out)
+  if (spkStatus === 'failed') {
+    return (
+      <Button
+        variant="secondary"
+        size="sm"
+        onClick={onRebuild}
+        disabled={isRebuilding}
+        className="whitespace-nowrap"
+      >
+        <RotateCcw
+          className={cn('mr-1.5 h-3.5 w-3.5', isRebuilding && 'animate-spin')}
+        />
+        {isRebuilding ? 'Retrying...' : 'Retry SPK'}
+      </Button>
+    );
+  }
+
+  // ready → Export
   return (
     <Button
       variant="secondary"
       size="sm"
       onClick={handleExport}
       disabled={isExporting || !isCompleted}
-      title={isCompleted ? 'Download SPK JSON' : 'Available after interview completes'}
       className="whitespace-nowrap"
     >
       {isExporting ? (
@@ -663,7 +916,9 @@ function DimensionRow({ dimension }: { dimension: ScorecardDimension }) {
   return (
     <li className="group relative overflow-hidden rounded-xl border border-line/80 bg-surface-card p-4 transition-all duration-300 hover:border-line-strong hover:bg-chip/40 hover:shadow-card">
       <div className="flex items-baseline justify-between gap-3">
-        <p className="truncate text-sm font-medium text-fg-strong">{dimension.name}</p>
+        <p className="truncate text-sm font-medium text-fg-strong">
+          {dimension.name}
+        </p>
         <span
           className={cn(
             'shrink-0 rounded-md px-2 py-0.5 font-mono text-xs font-bold tabular-nums ring-1',
@@ -690,7 +945,13 @@ function DimensionRow({ dimension }: { dimension: ScorecardDimension }) {
 // ============================================================
 // Dimensions Card
 // ============================================================
-function DimensionsCard({ dimensions, base }: { dimensions: ScorecardDimension[]; base: string }) {
+function DimensionsCard({
+  dimensions,
+  base,
+}: {
+  dimensions: ScorecardDimension[];
+  base: string;
+}) {
   return (
     <motion.div variants={fadeUp}>
       <Card className="overflow-hidden p-0 shadow-sm">
@@ -699,7 +960,9 @@ function DimensionsCard({ dimensions, base }: { dimensions: ScorecardDimension[]
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-500/15 text-accent-700 ring-1 ring-accent-500/20 dark:text-accent-300">
               <BarChart3 className="h-4 w-4" />
             </div>
-            <h2 className="text-base font-semibold text-fg-strong">Dimensions</h2>
+            <h2 className="text-base font-semibold text-fg-strong">
+              Dimensions
+            </h2>
           </div>
           <Link
             to={`${base}/evaluation`}
@@ -780,7 +1043,8 @@ function NextStepCard({
 
         <div className="border-t border-line bg-gradient-to-r from-chip/30 to-transparent px-6 py-4">
           <p className="text-xs leading-relaxed text-fg-muted">
-            Scores are evidence-based, not a hiring decision. Every flag stays pending until a human reviews it.
+            Scores are evidence-based, not a hiring decision. Every flag stays
+            pending until a human reviews it.
           </p>
         </div>
       </Card>
@@ -809,7 +1073,10 @@ function OverviewSkeleton() {
 
       <div className="grid gap-4 sm:grid-cols-3">
         {[0, 1, 2].map((index) => (
-          <div key={index} className="rounded-card border border-line bg-surface-card p-5">
+          <div
+            key={index}
+            className="rounded-card border border-line bg-surface-card p-5"
+          >
             <div className="h-4 w-24 rounded skeleton" />
             <div className="mt-4 h-8 w-16 rounded skeleton" />
             <div className="mt-3 h-3 w-28 rounded skeleton" />
@@ -823,7 +1090,13 @@ function OverviewSkeleton() {
 // ============================================================
 // States
 // ============================================================
-function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
+function ErrorState({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry: () => void;
+}) {
   return (
     <div className="mx-auto max-w-xl py-8">
       <Alert
@@ -837,7 +1110,10 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
       >
         {message}
       </Alert>
-      <Link to="/upload" className="mt-6 inline-flex items-center gap-1 text-sm font-semibold text-accent-700 hover:underline dark:text-accent-300">
+      <Link
+        to="/upload"
+        className="mt-6 inline-flex items-center gap-1 text-sm font-semibold text-accent-700 hover:underline dark:text-accent-300"
+      >
         ← Start a new analysis
       </Link>
     </div>
@@ -847,8 +1123,13 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
 function NotFoundState() {
   return (
     <div className="mx-auto max-w-xl py-8">
-      <Alert variant="error" title="Interview not found">This interview does not exist or was removed.</Alert>
-      <Link to="/upload" className="mt-6 inline-flex items-center gap-1 text-sm font-semibold text-accent-700 hover:underline dark:text-accent-300">
+      <Alert variant="error" title="Interview not found">
+        This interview does not exist or was removed.
+      </Alert>
+      <Link
+        to="/upload"
+        className="mt-6 inline-flex items-center gap-1 text-sm font-semibold text-accent-700 hover:underline dark:text-accent-300"
+      >
         ← Start a new analysis
       </Link>
     </div>
@@ -859,13 +1140,20 @@ function EmptyState({ base }: { base: string }) {
   return (
     <div className="mx-auto max-w-xl py-8">
       <Alert variant="info" title="No dimensions yet">
-        The scorecard was returned without any dimension scores. Re-run the analysis or check the API response for this interview.
+        The scorecard was returned without any dimension scores. Re-run the
+        analysis or check the API response for this interview.
       </Alert>
       <div className="mt-6 flex flex-wrap gap-3">
-        <Link to="/upload" className="text-sm font-semibold text-accent-700 hover:underline dark:text-accent-300">
+        <Link
+          to="/upload"
+          className="text-sm font-semibold text-accent-700 hover:underline dark:text-accent-300"
+        >
           ← Start a new analysis
         </Link>
-        <Link to={`${base}/evaluation`} className="text-sm font-semibold text-accent-700 hover:underline dark:text-accent-300">
+        <Link
+          to={`${base}/evaluation`}
+          className="text-sm font-semibold text-accent-700 hover:underline dark:text-accent-300"
+        >
           Open evaluation →
         </Link>
       </div>
@@ -873,7 +1161,13 @@ function EmptyState({ base }: { base: string }) {
   );
 }
 
-function FailedState({ interviewId, onRetry }: { interviewId: string; onRetry: () => void }) {
+function FailedState({
+  interviewId,
+  onRetry,
+}: {
+  interviewId: string;
+  onRetry: () => void;
+}) {
   const navigate = useNavigate();
   const [isRetrying, setIsRetrying] = useState(false);
 
@@ -881,11 +1175,14 @@ function FailedState({ interviewId, onRetry }: { interviewId: string; onRetry: (
     setIsRetrying(true);
     try {
       await forceEvaluation(interviewId);
-      toast.success('Retrying analysis', { description: 'The pipeline will restart shortly.' });
+      toast.success('Retrying analysis', {
+        description: 'The pipeline will restart shortly.',
+      });
       onRetry();
     } catch (cause) {
       toast.error('Could not retry', {
-        description: cause instanceof Error ? cause.message : 'Unknown error',
+        description:
+          cause instanceof Error ? cause.message : 'Unknown error',
       });
       setIsRetrying(false);
     }
@@ -897,13 +1194,18 @@ function FailedState({ interviewId, onRetry }: { interviewId: string; onRetry: (
         <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-danger-500/15 text-danger-600">
           <AlertCircle className="h-6 w-6" />
         </span>
-        <h2 className="mt-5 text-lg font-semibold text-danger-700 dark:text-danger-500">Analysis Failed</h2>
+        <h2 className="mt-5 text-lg font-semibold text-danger-700 dark:text-danger-500">
+          Analysis Failed
+        </h2>
         <p className="mt-2 text-sm text-danger-700/80 dark:text-danger-500/80">
-          The AI pipeline encountered an error and could not complete the analysis. You can try again or start a new one.
+          The AI pipeline encountered an error and could not complete the
+          analysis. You can try again or start a new one.
         </p>
         <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
           <Button variant="primary" onClick={handleRetry} disabled={isRetrying}>
-            <RotateCcw className={cn('mr-2 h-4 w-4', isRetrying && 'animate-spin')} />
+            <RotateCcw
+              className={cn('mr-2 h-4 w-4', isRetrying && 'animate-spin')}
+            />
             {isRetrying ? 'Retrying…' : 'Retry Analysis'}
           </Button>
           <Button variant="secondary" onClick={() => navigate('/upload')}>
@@ -925,17 +1227,46 @@ export function OverviewTab() {
   const { status, scorecard, error, refresh } = useScorecard();
   const base = `/dashboard/${interviewId}`;
 
+  const [isRebuilding, setIsRebuilding] = useState(false);
+
   useEffect(() => {
     if (status === 'rejected') {
-      toast.error('Session Rejected', { description: 'This interview was rejected. Please upload a new one.' });
+      toast.error('Session Rejected', {
+        description:
+          'This interview was rejected. Please upload a new one.',
+      });
       navigate('/upload', { replace: true });
     }
   }, [status, navigate]);
 
+  // Rebuild SPK handler — used by the Retry buttons in the SPK card and header.
+  const handleRebuildSpk = async () => {
+    setIsRebuilding(true);
+    try {
+      await rebuildSpkProfile(interviewId);
+      toast.success('SPK rebuild started', {
+        description: 'The profile will be regenerated shortly.',
+      });
+      // Refresh scorecard after a short delay to pick up status changes.
+      setTimeout(() => refresh(), 1500);
+    } catch (cause) {
+      toast.error('Failed to rebuild SPK', {
+        description:
+          cause instanceof Error ? cause.message : 'Unknown error',
+      });
+    } finally {
+      setIsRebuilding(false);
+    }
+  };
+
   if (status === 'loading') {
     return (
       <>
-        <SEO title="Interview overview" description="Candidate scorecard overview." noIndex />
+        <SEO
+          title="Interview overview"
+          description="Candidate scorecard overview."
+          noIndex
+        />
         <OverviewSkeleton />
       </>
     );
@@ -944,7 +1275,11 @@ export function OverviewTab() {
   if (status === 'needs-review') {
     return (
       <>
-        <SEO title="Manual review required" description="Interview needs manual review." noIndex />
+        <SEO
+          title="Manual review required"
+          description="Interview needs manual review."
+          noIndex
+        />
         <ReviewBanner />
       </>
     );
@@ -953,7 +1288,11 @@ export function OverviewTab() {
   if (status === 'processing') {
     return (
       <>
-        <SEO title="Interview overview" description="Candidate scorecard overview." noIndex />
+        <SEO
+          title="Interview overview"
+          description="Candidate scorecard overview."
+          noIndex
+        />
         <ProcessingState />
       </>
     );
@@ -962,7 +1301,11 @@ export function OverviewTab() {
   if (status === 'failed') {
     return (
       <>
-        <SEO title="Analysis failed" description="The analysis failed." noIndex />
+        <SEO
+          title="Analysis failed"
+          description="The analysis failed."
+          noIndex
+        />
         <FailedState interviewId={interviewId} onRetry={refresh} />
       </>
     );
@@ -971,7 +1314,11 @@ export function OverviewTab() {
   if (status === 'not-found') {
     return (
       <>
-        <SEO title="Interview not found" description="Interview not found." noIndex />
+        <SEO
+          title="Interview not found"
+          description="Interview not found."
+          noIndex
+        />
         <NotFoundState />
       </>
     );
@@ -980,8 +1327,17 @@ export function OverviewTab() {
   if (status === 'error' || !scorecard || scorecard.status !== 'scored') {
     return (
       <>
-        <SEO title="Interview overview" description="Candidate scorecard overview." noIndex />
-        <ErrorState message={error ?? 'Something went wrong while loading the scorecard.'} onRetry={refresh} />
+        <SEO
+          title="Interview overview"
+          description="Candidate scorecard overview."
+          noIndex
+        />
+        <ErrorState
+          message={
+            error ?? 'Something went wrong while loading the scorecard.'
+          }
+          onRetry={refresh}
+        />
       </>
     );
   }
@@ -995,14 +1351,27 @@ export function OverviewTab() {
     totalDiscrepancies,
     skillGaps,
     timeSaved,
+    spkStatus,
+    spkError,
   } = scorecard;
+
   const average = averageScore(dimensions);
+  const effectiveSpkStatus: SpkStatus = spkStatus ?? 'pending';
 
   return (
     <>
-      <SEO title={`${candidateName} · Interview overview`} description={`Scorecard overview for ${candidateName}.`} noIndex />
+      <SEO
+        title={`${candidateName} · Interview overview`}
+        description={`Scorecard overview for ${candidateName}.`}
+        noIndex
+      />
 
-      <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-8">
+      <motion.div
+        variants={staggerContainer}
+        initial="hidden"
+        animate="visible"
+        className="space-y-8"
+      >
         <PageHeading
           candidateName={candidateName}
           interviewDate={interviewDate}
@@ -1012,6 +1381,9 @@ export function OverviewTab() {
               interviewId={interviewId}
               candidateName={candidateName}
               isCompleted={true}
+              spkStatus={effectiveSpkStatus}
+              onRebuild={handleRebuildSpk}
+              isRebuilding={isRebuilding}
             />
           }
         />
@@ -1022,13 +1394,22 @@ export function OverviewTab() {
           <>
             {/* Row 1: 3 cards */}
             <div className="grid gap-4 sm:grid-cols-3">
-              <AverageScoreCard average={average} count={dimensions.length} />
+              <AverageScoreCard
+                average={average}
+                count={dimensions.length}
+              />
 
               <StatCard
                 label="Pending discrepancies"
                 value={showCount(pendingDiscrepancies)}
                 hint="Claims that still need a human decision"
-                tone={typeof pendingDiscrepancies === 'number' ? (pendingDiscrepancies > 0 ? 'danger' : 'success') : undefined}
+                tone={
+                  typeof pendingDiscrepancies === 'number'
+                    ? pendingDiscrepancies > 0
+                      ? 'danger'
+                      : 'success'
+                    : undefined
+                }
                 href={`${base}/discrepancies`}
                 hrefLabel="Review claims"
                 icon={<Flag className="h-4 w-4" />}
@@ -1038,7 +1419,13 @@ export function OverviewTab() {
                 label="Skill gaps"
                 value={showCount(skillGaps)}
                 hint="Growth areas detected in the interview"
-                tone={typeof skillGaps === 'number' ? (skillGaps > 0 ? 'warning' : 'success') : undefined}
+                tone={
+                  typeof skillGaps === 'number'
+                    ? skillGaps > 0
+                      ? 'warning'
+                      : 'success'
+                    : undefined
+                }
                 href={`${base}/roadmap`}
                 hrefLabel="Open growth plan"
                 icon={<TrendingUp className="h-4 w-4" />}
@@ -1067,11 +1454,18 @@ export function OverviewTab() {
                   discrepanciesFlagged={totalDiscrepancies ?? 0}
                   pendingDiscrepancies={pendingDiscrepancies ?? 0}
                   skillGaps={skillGaps ?? 0}
+                  spkStatus={effectiveSpkStatus}
+                  spkError={spkError ?? null}
+                  onRebuild={handleRebuildSpk}
+                  isRebuilding={isRebuilding}
                 />
                 <DimensionsCard dimensions={dimensions} base={base} />
               </div>
 
-              <NextStepCard base={base} pendingDiscrepancies={pendingDiscrepancies} />
+              <NextStepCard
+                base={base}
+                pendingDiscrepancies={pendingDiscrepancies}
+              />
             </div>
           </>
         )}

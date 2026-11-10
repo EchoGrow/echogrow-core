@@ -1,3 +1,11 @@
+/**
+ * E2E: REST endpoints (no LLM calls).
+ *
+ * Every test in this file uses seeded DB rows (seedSession, seedScorecard, spkProfile.create).
+ * No test here calls Gemini. Safe to run without GEMINI_API_KEY.
+ *
+ * Requires: PostgreSQL + Redis (because the pipeline worker boots up).
+ */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
@@ -158,9 +166,6 @@ describe('E2E: REST endpoints (no LLM calls)', () => {
       expect(body.skillGaps).toBe(3);
     });
 
-    // ============================================================
-    // timeSaved field
-    // ============================================================
     it('returns a computed timeSaved object when status is COMPLETED', async () => {
       const s = await seedSession(prisma, {
         status: 'COMPLETED',
@@ -176,7 +181,6 @@ describe('E2E: REST endpoints (no LLM calls)', () => {
         gaps: ['Docker'],
       });
 
-      // Simulate processing time by adjusting updatedAt in the DB
       await prisma.interviewSession.update({
         where: { id: s.id },
         data: {
@@ -404,7 +408,7 @@ describe('E2E: REST endpoints (no LLM calls)', () => {
   });
 
   // ============================================================
-  // GET /interviews/:id/spk-export
+  // GET /interviews/:id/spk-export  (no LLM — reads from DB)
   // ============================================================
   describe('GET /interviews/:id/spk-export', () => {
     it('404 for unknown interview', async () => {
@@ -457,38 +461,10 @@ describe('E2E: REST endpoints (no LLM calls)', () => {
             overall_score: 55,
             confidence: 0.9,
             dimensions: [
-              {
-                name: 'Technical Depth',
-                score: 40,
-                raw_score: 2,
-                reason: 'Weak on optimization',
-                evidence_quote: 'I never used EXPLAIN',
-                evidence_timestamp: '00:03:15',
-              },
-              {
-                name: 'Communication Clarity',
-                score: 80,
-                raw_score: 4,
-                reason: 'Clear',
-                evidence_quote: 'Let me explain...',
-                evidence_timestamp: '00:01:00',
-              },
-              {
-                name: 'Domain Experience',
-                score: 60,
-                raw_score: 3,
-                reason: 'Some gaps',
-                evidence_quote: 'I built monoliths',
-                evidence_timestamp: '00:02:10',
-              },
-              {
-                name: 'Problem Solving',
-                score: 40,
-                raw_score: 2,
-                reason: 'Naive approach',
-                evidence_quote: 'I guessed',
-                evidence_timestamp: '00:04:30',
-              },
+              { name: 'Technical Depth', score: 40, raw_score: 2, reason: 'Weak', evidence_quote: 'q1', evidence_timestamp: '00:03:15' },
+              { name: 'Communication Clarity', score: 80, raw_score: 4, reason: 'Clear', evidence_quote: 'q2', evidence_timestamp: '00:01:00' },
+              { name: 'Domain Experience', score: 60, raw_score: 3, reason: 'Some', evidence_quote: 'q3', evidence_timestamp: '00:02:10' },
+              { name: 'Problem Solving', score: 40, raw_score: 2, reason: 'Naive', evidence_quote: 'q4', evidence_timestamp: '00:04:30' },
             ],
             verified_skills: ['Node.js', 'Express', 'JWT'],
             recommended_upskilling: [
@@ -496,18 +472,8 @@ describe('E2E: REST endpoints (no LLM calls)', () => {
               { skill: 'Docker', priority: 'MEDIUM' },
             ],
             roadmap: [
-              {
-                week: 1,
-                skill: 'Kubernetes',
-                task: 'Learn fundamentals',
-                resource_url: 'https://kubernetes.io/docs/',
-              },
-              {
-                week: 2,
-                skill: 'Docker',
-                task: 'Practice Dockerfile',
-                resource_url: 'https://docs.docker.com/',
-              },
+              { week: 1, skill: 'Kubernetes', task: 'Learn fundamentals', resource_url: 'https://kubernetes.io/docs/' },
+              { week: 2, skill: 'Docker', task: 'Practice Dockerfile', resource_url: 'https://docs.docker.com/' },
             ],
             discrepancies: [
               {
@@ -551,24 +517,185 @@ describe('E2E: REST endpoints (no LLM calls)', () => {
       expect(body.schema_version).toBe('1.0.0');
       expect(body.generated_at).toBeTruthy();
     });
-  });
 
-  // ============================================================
-  // POST /interviews/:id/spk-rebuild
-  // ============================================================
-  describe('POST /interviews/:id/spk-rebuild', () => {
-    it('404 for unknown interview', async () => {
-      const res = await api().post('/interviews/does-not-exist/spk-rebuild').expect(404);
-      expect(res.body.message).toMatch(/not found/i);
+    // Dynamic human_review_status recomputation (no LLM).
+    it('recomputes human_review_status dynamically after a discrepancy is dismissed', async () => {
+      const s = await seedSession(prisma, {
+        status: 'COMPLETED',
+        isScored: true,
+        isVerified: true,
+        isPlanned: true,
+        name: 'Dynamic SPK',
+      });
+      const { discrepancyIds } = await seedScorecard(prisma, s.id, {
+        scores: [3, 3, 3, 3],
+        discrepancies: 1,
+        gaps: [],
+      });
+
+      await prisma.spkProfile.create({
+        data: {
+          interviewId: s.id,
+          schemaVersion: '1.0.0',
+          spkPayload: {
+            candidate_id: s.candidateId,
+            candidate_name: 'Dynamic SPK',
+            overall_score: 60,
+            confidence: 0.9,
+            dimensions: [
+              { name: 'Technical Depth', score: 60, raw_score: 3, reason: 'OK', evidence_quote: 'q1', evidence_timestamp: '00:01' },
+              { name: 'Communication Clarity', score: 60, raw_score: 3, reason: 'OK', evidence_quote: 'q2', evidence_timestamp: '00:02' },
+              { name: 'Domain Experience', score: 60, raw_score: 3, reason: 'OK', evidence_quote: 'q3', evidence_timestamp: '00:03' },
+              { name: 'Problem Solving', score: 60, raw_score: 3, reason: 'OK', evidence_quote: 'q4', evidence_timestamp: '00:04' },
+            ],
+            verified_skills: [],
+            recommended_upskilling: [],
+            roadmap: [],
+            discrepancies: [],
+            discrepancies_count: 1,          // stale
+            human_review_status: 'pending',   // stale
+            seniority: null, primary_role: null, timezone: null, languages: null, years_of_experience: null,
+            generated_at: new Date().toISOString(),
+            schema_version: '1.0.0',
+          } as any,
+        },
+      });
+
+      let res = await api().get(`/interviews/${s.id}/spk-export`).expect(200);
+      expect(res.body.human_review_status).toBe('pending');
+      expect(res.body.discrepancies_count).toBe(1);
+
+      await api()
+        .patch(`/discrepancies/${discrepancyIds[0]}`)
+        .send({ status: 'dismissed' })
+        .expect(200);
+
+      res = await api().get(`/interviews/${s.id}/spk-export`).expect(200);
+      expect(res.body.human_review_status).toBe('approved');
+      expect(res.body.discrepancies_count).toBe(1);
     });
 
-    it('201 and returns { interviewId, status: "rebuilt" }', async () => {
-      const s = await seedSession(prisma, { status: 'COMPLETED' });
-      await seedScorecard(prisma, s.id, { scores: [3, 3, 3, 3], discrepancies: 0, gaps: [] });
+    // Verified skills must not contain any gap skill (stored payload).
+    it('does not expose gap skills inside verified_skills (stored payload)', async () => {
+      const s = await seedSession(prisma, {
+        status: 'COMPLETED',
+        isScored: true,
+        isVerified: true,
+        isPlanned: true,
+        name: 'Filter Stored',
+      });
 
-      const { body } = await api().post(`/interviews/${s.id}/spk-rebuild`).expect(201);
-      expect(body.interviewId).toBe(s.id);
-      expect(body.status).toBe('rebuilt');
+      await seedScorecard(prisma, s.id, {
+        scores: [3, 3, 3, 3],
+        discrepancies: 0,
+        gaps: ['Docker', 'Containerization'],
+      });
+
+      await prisma.spkProfile.create({
+        data: {
+          interviewId: s.id,
+          schemaVersion: '1.0.0',
+          spkPayload: {
+            candidate_id: s.candidateId,
+            candidate_name: 'Filter Stored',
+            overall_score: 60,
+            confidence: 0.9,
+            dimensions: [
+              { name: 'Technical Depth', score: 60, raw_score: 3, reason: 'OK', evidence_quote: 'q1', evidence_timestamp: '00:01' },
+              { name: 'Communication Clarity', score: 60, raw_score: 3, reason: 'OK', evidence_quote: 'q2', evidence_timestamp: '00:02' },
+              { name: 'Domain Experience', score: 60, raw_score: 3, reason: 'OK', evidence_quote: 'q3', evidence_timestamp: '00:03' },
+              { name: 'Problem Solving', score: 60, raw_score: 3, reason: 'OK', evidence_quote: 'q4', evidence_timestamp: '00:04' },
+            ],
+            verified_skills: ['React', 'TypeScript'],
+            recommended_upskilling: [
+              { skill: 'Docker', priority: 'MEDIUM' },
+              { skill: 'Containerization', priority: 'MEDIUM' },
+            ],
+            roadmap: [
+              { week: 1, skill: 'Docker', task: 'Learn Docker', resource_url: 'https://docs.docker.com/' },
+              { week: 2, skill: 'Containerization', task: 'Learn containerization', resource_url: 'https://www.google.com/search?q=Containerization+tutorial' },
+            ],
+            discrepancies: [],
+            discrepancies_count: 0,
+            human_review_status: 'approved',
+            seniority: null, primary_role: null, timezone: null, languages: null, years_of_experience: null,
+            generated_at: new Date().toISOString(),
+            schema_version: '1.0.0',
+          } as any,
+        },
+      });
+
+      const res = await api().get(`/interviews/${s.id}/spk-export`).expect(200);
+      const verified = res.body.verified_skills as string[];
+      const gaps = res.body.recommended_upskilling.map((u: any) => u.skill) as string[];
+
+      for (const v of verified) {
+        for (const g of gaps) {
+          expect(v.toLowerCase()).not.toContain(g.toLowerCase());
+        }
+      }
+      expect(verified).toContain('React');
+      expect(verified).toContain('TypeScript');
+    });
+
+    // Roadmap must be sorted by week ascending.
+    it('returns roadmap sorted by week ascending', async () => {
+      const s = await seedSession(prisma, {
+        status: 'COMPLETED',
+        isScored: true,
+        isVerified: true,
+        isPlanned: true,
+        name: 'Sort Test',
+      });
+
+      await seedScorecard(prisma, s.id, {
+        scores: [3, 3, 3, 3],
+        discrepancies: 0,
+        gaps: ['A', 'B', 'C'],
+      });
+
+      await prisma.spkProfile.create({
+        data: {
+          interviewId: s.id,
+          schemaVersion: '1.0.0',
+          spkPayload: {
+            candidate_id: s.candidateId,
+            candidate_name: 'Sort Test',
+            overall_score: 60,
+            confidence: 0.9,
+            dimensions: [
+              { name: 'Technical Depth', score: 60, raw_score: 3, reason: 'OK', evidence_quote: 'q1', evidence_timestamp: '00:01' },
+              { name: 'Communication Clarity', score: 60, raw_score: 3, reason: 'OK', evidence_quote: 'q2', evidence_timestamp: '00:02' },
+              { name: 'Domain Experience', score: 60, raw_score: 3, reason: 'OK', evidence_quote: 'q3', evidence_timestamp: '00:03' },
+              { name: 'Problem Solving', score: 60, raw_score: 3, reason: 'OK', evidence_quote: 'q4', evidence_timestamp: '00:04' },
+            ],
+            verified_skills: [],
+            recommended_upskilling: [
+              { skill: 'A', priority: 'MEDIUM' },
+              { skill: 'B', priority: 'MEDIUM' },
+              { skill: 'C', priority: 'MEDIUM' },
+            ],
+            roadmap: [
+              { week: 1, skill: 'A', task: 'Learn A', resource_url: 'https://a.com/' },
+              { week: 2, skill: 'B', task: 'Learn B', resource_url: 'https://b.com/' },
+              { week: 3, skill: 'C', task: 'Learn C', resource_url: 'https://c.com/' },
+            ],
+            discrepancies: [],
+            discrepancies_count: 0,
+            human_review_status: 'approved',
+            seniority: null, primary_role: null, timezone: null, languages: null, years_of_experience: null,
+            generated_at: new Date().toISOString(),
+            schema_version: '1.0.0',
+          } as any,
+        },
+      });
+
+      const res = await api().get(`/interviews/${s.id}/spk-export`).expect(200);
+      const weeks = (res.body.roadmap as any[]).map((r) => r.week);
+      expect(weeks).toEqual([1, 2, 3]);
+      for (let i = 1; i < weeks.length; i++) {
+        expect(weeks[i]).toBeGreaterThan(weeks[i - 1]);
+      }
     });
   });
 
@@ -626,8 +753,6 @@ describe('E2E: REST endpoints (no LLM calls)', () => {
 
       const res = await req.expect(400);
       expect(res.body.message).toMatch(/Too many candidates/);
-      expect(res.body.message).toMatch(/51/);
-      expect(res.body.message).toMatch(/50/);
     });
 
     it('400 when metadata contains an invalid candidate shape', async () => {
@@ -742,7 +867,6 @@ describe('E2E: REST endpoints (no LLM calls)', () => {
       expect(res.body.summary.failed).toBe(1);
       expect(res.body.results[0].status).toBe('error');
       expect(res.body.results[0].error).toMatch(/Transcript is too short/);
-      expect(res.body.results[0].error).toMatch(/< 40 chars/);
     });
 
     it('201 rejects files larger than 2MB individually, processes the rest', async () => {

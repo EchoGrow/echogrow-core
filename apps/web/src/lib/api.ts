@@ -64,6 +64,8 @@ export interface TimeSavedBreakdown {
   savedSeconds: number;
 }
 
+export type SpkStatus = 'pending' | 'building' | 'ready' | 'failed';
+
 export interface ScoredResponse {
   status: 'scored'
   interviewId: string
@@ -75,6 +77,21 @@ export interface ScoredResponse {
   totalDiscrepancies: number
   skillGaps: number
   timeSaved?: TimeSavedBreakdown
+  spkStatus?: SpkStatus
+  spkError?: string | null
+  // NEW: progress flags.
+  //
+  // The backend moves through SCORED → SCORED → SCORED → COMPLETED as each
+  // pipeline step finishes (scoring, verification, planning). These flags
+  // tell the frontend whether the pipeline is still running so it can keep
+  // polling instead of showing an incomplete report.
+  //
+  // They may be undefined on older payloads; treat undefined as "completed".
+  progress?: {
+    isScored: boolean
+    isVerified: boolean
+    isPlanned: boolean
+  }
 }
 
 export interface FailedResponse {
@@ -132,12 +149,12 @@ export interface RoadmapResponse {
 }
 
 // ============================================================
-// SPK Export Types (matches the backend payload)
+// SPK Export Types
 // ============================================================
 export interface SpkDimension {
   name: string;
-  score: number;       // 0-100
-  raw_score: number;   // 1-5
+  score: number;
+  raw_score: number;
   reason?: string;
   evidence_quote?: string;
   evidence_timestamp?: string;
@@ -166,8 +183,8 @@ export interface SpkRoadmapItem {
 export interface SpkExport {
   candidate_id: string;
   candidate_name: string;
-  overall_score: number;        // 0-100
-  confidence: number;           // 0-1
+  overall_score: number;
+  confidence: number;
   dimensions: SpkDimension[];
   verified_skills: string[];
   recommended_upskilling: SpkSkillGap[];
@@ -449,9 +466,6 @@ export async function getRoadmap(interviewId: string): Promise<RoadmapResponse> 
   }
 }
 
-/**
- * Validates a roadmap response before it is used for export.
- */
 export function validateRoadmapForExport(data: RoadmapResponse | null | undefined): asserts data is RoadmapResponse {
   if (!data) {
     throw new ApiError(

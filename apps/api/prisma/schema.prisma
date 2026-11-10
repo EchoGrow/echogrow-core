@@ -55,6 +55,10 @@ model InterviewSession {
   createdAt            DateTime        @default(now()) @map("created_at")
   updatedAt            DateTime        @updatedAt @map("updated_at")
 
+  // SPK build status
+  spkStatus            String?         @map("spk_status")   // 'pending' | 'building' | 'ready' | 'failed'
+  spkError             String?         @map("spk_error")    @db.Text
+
   candidate Candidate  @relation(fields: [candidateId], references: [id], onDelete: Restrict)
   scorecard Scorecard?
   spkProfile SpkProfile?

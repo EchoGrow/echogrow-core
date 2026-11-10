@@ -89,6 +89,7 @@ export class InterviewsService {
         isScored: false,
         isVerified: false,
         isPlanned: false,
+        spkStatus: 'pending',
       },
     });
 
@@ -128,7 +129,6 @@ export class InterviewsService {
           reason: 'File is empty (0 bytes).',
           sizeBytes: 0,
         });
-        this.logger.warn(`[Bulk] Rejected empty file: ${file.originalname}`);
         continue;
       }
 
@@ -140,7 +140,6 @@ export class InterviewsService {
           reason: `File is too large (${sizeMb} MB). Maximum is ${limitMb} MB per file.`,
           sizeBytes: file.size,
         });
-        this.logger.warn(`[Bulk] Rejected oversized file: ${file.originalname} (${sizeMb} MB)`);
         continue;
       }
 
@@ -160,7 +159,6 @@ export class InterviewsService {
         const transcriptFile =
           fileMap.get(candidate.transcriptFileName) ??
           fileMap.get(candidate.transcriptFileName.toLowerCase());
-
         if (!transcriptFile) {
           results.push({
             candidateName: candidate.candidateName,
@@ -174,7 +172,6 @@ export class InterviewsService {
         const resumeFile =
           fileMap.get(candidate.resumeFileName) ??
           fileMap.get(candidate.resumeFileName.toLowerCase());
-
         if (!resumeFile) {
           results.push({
             candidateName: candidate.candidateName,
@@ -221,8 +218,6 @@ export class InterviewsService {
           status: 'queued',
           interviewId,
         });
-
-        this.logger.log(`[Bulk] Queued ${candidate.candidateEmail} → ${interviewId}`);
       } catch (cause: any) {
         results.push({
           candidateName: candidate.candidateName,
@@ -230,16 +225,11 @@ export class InterviewsService {
           status: 'error',
           error: cause instanceof Error ? cause.message : 'Unknown error',
         });
-        this.logger.warn(`[Bulk] Failed for ${candidate.candidateEmail}: ${cause.message}`);
       }
     }
 
     const queued = results.filter((r) => r.status === 'queued').length;
     const failed = results.filter((r) => r.status === 'error').length;
-
-    this.logger.log(
-      `[Bulk] Summary: ${queued} queued, ${failed} failed, ${rejectedFiles.length} files rejected (total ${results.length})`,
-    );
 
     return {
       results,
@@ -359,6 +349,7 @@ export class InterviewsService {
       timeSaved = this.computeTimeSavedFallback(
         {
           createdAt: session.createdAt,
+          completedAt: (session as any).completedAt ?? session.updatedAt,
           updatedAt: session.updatedAt,
           transcript: session.transcript,
           resume: session.resume,
@@ -388,6 +379,9 @@ export class InterviewsService {
       totalDiscrepancies,
       skillGaps,
       timeSaved,
+      // Issue 1 fix: expose SPK build status to the frontend
+      spkStatus: (session as any).spkStatus ?? 'pending',
+      spkError: (session as any).spkError ?? null,
     };
 
     return ScorecardSchema.parse(response);
@@ -413,6 +407,8 @@ export class InterviewsService {
         isScored: false,
         isVerified: false,
         isPlanned: false,
+        spkStatus: 'pending',
+        spkError: null,
       },
     });
 
@@ -545,7 +541,13 @@ export class InterviewsService {
   }
 
   private computeTimeSavedFallback(
-    session: { createdAt: Date; updatedAt: Date; transcript: string; resume: string },
+    session: {
+      createdAt: Date;
+      completedAt?: Date;
+      updatedAt: Date;
+      transcript: string;
+      resume: string;
+    },
     discrepanciesCount: number,
     weakDimensionsCount: number,
   ) {
@@ -568,9 +570,11 @@ export class InterviewsService {
       discrepanciesCount * C.MINUTES_PER_DISCREPANCY +
       weakDimensionsCount * C.MINUTES_PER_WEAK_DIMENSION;
 
+    // Issue 4 fix: prefer completedAt over updatedAt
+    const endTime = session.completedAt ?? session.updatedAt;
     const rawSeconds = Math.max(
       0,
-      (session.updatedAt.getTime() - session.createdAt.getTime()) / 1000,
+      (endTime.getTime() - session.createdAt.getTime()) / 1000,
     );
     const echoGrowSeconds = Math.min(rawSeconds, C.ECHOGROW_CAP_SECONDS);
     const savedSeconds = Math.max(0, manualMinutes * 60 - echoGrowSeconds);

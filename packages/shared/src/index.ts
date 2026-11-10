@@ -5,5 +5,8 @@ export * from './schemas/interview.schema';
 export * from './schemas/evaluation-worker.schema';
 export * from './schemas/spk.schema';
 
-import whitelist from './data/whitelist.json';
-export { whitelist };
+import whitelistData from './data/whitelist.json';
+import type { WhitelistEntry } from './schemas/roadmap.schema';
+
+// Typed whitelist so consumers get `aliases` autocomplete.
+export const whitelist = whitelistData as WhitelistEntry[];

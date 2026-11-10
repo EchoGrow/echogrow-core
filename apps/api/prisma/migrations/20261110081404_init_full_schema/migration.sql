@@ -43,6 +43,8 @@ CREATE TABLE "interview_sessions" (
     "completed_at" TIMESTAMP(3),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
+    "spk_status" TEXT,
+    "spk_error" TEXT,
 
     CONSTRAINT "interview_sessions_pkey" PRIMARY KEY ("id")
 );

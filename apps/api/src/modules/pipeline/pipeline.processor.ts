@@ -52,7 +52,14 @@ export class PipelineProcessor extends WorkerHost {
         return { success: true, status: 'completed', skipped: true };
       }
 
-      await this.evaluationService.updateStatus(interviewId, 'PROCESSING');
+      // ============================================================
+      // STEP 0: mark as PROCESSING (frontend will poll for isScored/isVerified/isPlanned)
+      // ============================================================
+      await this.evaluationService.updateProgress(interviewId, 'PROCESSING', {
+        isScored: false,
+        isVerified: false,
+        isPlanned: false,
+      });
 
       const session = await this.prisma.interviewSession.findUnique({
         where: { id: interviewId },
@@ -60,12 +67,14 @@ export class PipelineProcessor extends WorkerHost {
       });
       if (!session) throw new Error('Interview session not found');
 
+      // Parse transcript.
       const turns = this.parser.parse(session.transcript);
       await this.prisma.interviewSession.update({
         where: { id: interviewId },
         data: { structuredTranscript: turns as any },
       });
 
+      // Confidence check.
       if (!force) {
         const confidence = this.parser.calculateConfidence(session.transcript);
         this.logger.log(`[Pipeline] Transcript confidence: ${confidence}`);
@@ -74,7 +83,11 @@ export class PipelineProcessor extends WorkerHost {
           this.logger.warn(
             `[Pipeline] Low confidence (${confidence}). Routing to NEEDS_REVIEW.`,
           );
-          await this.evaluationService.updateStatus(interviewId, 'NEEDS_REVIEW');
+          await this.evaluationService.updateProgress(interviewId, 'NEEDS_REVIEW', {
+            isScored: false,
+            isVerified: false,
+            isPlanned: false,
+          });
           return {
             success: true,
             status: 'needs_review',
@@ -86,7 +99,9 @@ export class PipelineProcessor extends WorkerHost {
         this.logger.log(`[Pipeline] Force flag set. Skipping confidence check.`);
       }
 
-      // 1. Scoring
+      // ============================================================
+      // STEP 1: Scoring → mark isScored = true IMMEDIATELY after
+      // ============================================================
       const evaluation = await this.evaluationService.evaluate(
         session.transcript,
         session.resume,
@@ -96,13 +111,16 @@ export class PipelineProcessor extends WorkerHost {
         evaluation,
       );
 
-      await this.prisma.interviewSession.update({
-        where: { id: interviewId },
-        data: { isScored: true },
+      // Update status AND isScored in one atomic operation.
+      // The frontend's "Scoring" step will flip to ✅ immediately.
+      await this.evaluationService.updateProgress(interviewId, 'SCORED', {
+        isScored: true,
       });
       this.logger.log(`[Pipeline] Scoring done for ${interviewId}`);
 
-      // 2. Discrepancies
+      // ============================================================
+      // STEP 2: Discrepancies → mark isVerified = true IMMEDIATELY after
+      // ============================================================
       const discrepancies = await this.discrepancyService.detect(
         session.resume,
         session.transcript,
@@ -112,13 +130,15 @@ export class PipelineProcessor extends WorkerHost {
         discrepancies,
       );
 
-      await this.prisma.interviewSession.update({
-        where: { id: interviewId },
-        data: { isVerified: true },
+      await this.evaluationService.updateProgress(interviewId, 'SCORED', {
+        isScored: true,
+        isVerified: true,
       });
       this.logger.log(`[Pipeline] Verification done for ${interviewId}`);
 
-      // 3. Roadmap
+      // ============================================================
+      // STEP 3: Roadmap → mark isPlanned = true IMMEDIATELY after
+      // ============================================================
       const roadmapResult = await this.roadmapService.generateAndSave(scorecardId);
 
       if (roadmapResult) {
@@ -131,17 +151,26 @@ export class PipelineProcessor extends WorkerHost {
         );
       }
 
-      await this.prisma.interviewSession.update({
-        where: { id: interviewId },
-        data: { isPlanned: true },
+      await this.evaluationService.updateProgress(interviewId, 'SCORED', {
+        isScored: true,
+        isVerified: true,
+        isPlanned: true,
       });
       this.logger.log(`[Pipeline] Planning done for ${interviewId}`);
 
-      // 4. Final status
-      await this.evaluationService.updateStatus(interviewId, 'COMPLETED');
+      // ============================================================
+      // STEP 4: mark COMPLETED (now the frontend shows the full report)
+      // ============================================================
+      await this.evaluationService.updateProgress(interviewId, 'COMPLETED', {
+        isScored: true,
+        isVerified: true,
+        isPlanned: true,
+      });
       this.logger.log(`[Pipeline] Completed for session ${interviewId}`);
 
-      // 5. Time Saved snapshot (computed once, persisted to DB)
+      // ============================================================
+      // STEP 5: save time-saved snapshot
+      // ============================================================
       try {
         const scorecard = await this.prisma.scorecard.findUnique({
           where: { interviewId },
@@ -164,7 +193,9 @@ export class PipelineProcessor extends WorkerHost {
         );
       }
 
-      // 6. Build SPK profile (LLM metadata + verified skills)
+      // ============================================================
+      // STEP 6: build SPK profile (background, non-fatal)
+      // ============================================================
       try {
         await this.spkService.buildSpkProfile(interviewId);
       } catch (cause: any) {
@@ -172,7 +203,6 @@ export class PipelineProcessor extends WorkerHost {
           `[Pipeline] SPK profile build failed for ${interviewId}: ${cause.message}`,
           cause.stack,
         );
-        // Non-fatal: pipeline is still COMPLETED, but SPK export will be unavailable.
       }
 
       return {
@@ -188,7 +218,11 @@ export class PipelineProcessor extends WorkerHost {
         error.stack,
       );
 
-      await this.evaluationService.updateStatus(interviewId, 'FAILED');
+      await this.evaluationService.updateProgress(interviewId, 'FAILED', {
+        isScored: false,
+        isVerified: false,
+        isPlanned: false,
+      });
 
       throw error;
     }
