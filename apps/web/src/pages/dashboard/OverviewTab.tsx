@@ -29,6 +29,7 @@ import { SEO } from '../../components/SEO';
 import { Alert, Button, Card, toast } from '../../components/ui';
 import { ReviewBanner } from '../../components/ui/ReviewBanner';
 import { ProcessingState } from '../../components/dashboard/ProcessingState';
+import { ReportDownloadButton } from '../../components/report/ReportDownloadButton';
 import { useScorecard } from '../../lib/scorecard/useScorecard';
 import {
   forceEvaluation,
@@ -172,11 +173,13 @@ function PageHeading({
   interviewDate,
   interviewId,
   spkExportButton,
+  action,
 }: {
   candidateName: string;
   interviewDate: string;
   interviewId: string;
   spkExportButton?: React.ReactNode;
+  action?: React.ReactNode;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -297,8 +300,9 @@ function PageHeading({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           {spkExportButton}
+          {action} 
           <span className="inline-flex shrink-0 items-center gap-2 rounded-full border border-success-500/30 bg-success-50 px-3 py-1.5 text-xs font-medium text-success-700 dark:bg-success-500/10 dark:text-success-500">
             <span className="relative flex h-2 w-2">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success-500 opacity-75" />
@@ -1384,6 +1388,14 @@ export function OverviewTab() {
               spkStatus={effectiveSpkStatus}
               onRebuild={handleRebuildSpk}
               isRebuilding={isRebuilding}
+            />
+          }
+          action={
+            <ReportDownloadButton
+              interviewId={interviewId}
+              candidateName={candidateName}
+              interviewDate={interviewDate}
+              scorecard={scorecard}
             />
           }
         />

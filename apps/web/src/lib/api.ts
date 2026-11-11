@@ -34,7 +34,7 @@ export interface NeedsReviewResponse {
   candidateName: string
   transcript: string
   resume: string
-  structuredTranscript?: any
+  structuredTranscript?: unknown
   confidence: number
   message: string
 }
@@ -79,14 +79,6 @@ export interface ScoredResponse {
   timeSaved?: TimeSavedBreakdown
   spkStatus?: SpkStatus
   spkError?: string | null
-  // NEW: progress flags.
-  //
-  // The backend moves through SCORED → SCORED → SCORED → COMPLETED as each
-  // pipeline step finishes (scoring, verification, planning). These flags
-  // tell the frontend whether the pipeline is still running so it can keep
-  // polling instead of showing an incomplete report.
-  //
-  // They may be undefined on older payloads; treat undefined as "completed".
   progress?: {
     isScored: boolean
     isVerified: boolean
@@ -103,6 +95,8 @@ export interface FailedResponse {
 
 export type DiscrepancyStatus = 'pending' | 'confirmed' | 'dismissed'
 
+export type DiscrepancySeverity = 'low' | 'medium' | 'high'
+
 export interface DiscrepancyRecord {
   id: string
   field: string
@@ -111,6 +105,7 @@ export interface DiscrepancyRecord {
   cvQuote: string
   interviewQuote: string
   confidence: number
+  severity: DiscrepancySeverity  // ← required (no `?`)
   action: 'flag_for_human_review'
   status: DiscrepancyStatus
 }
@@ -252,6 +247,10 @@ async function readErrorMessage(response: Response): Promise<string> {
 
   return fallbackMessage(response.status)
 }
+
+// ============================================================
+// Real API
+// ============================================================
 
 export async function createInterview(input: CreateInterviewRequest): Promise<CreateInterviewResponse> {
   const controller = new AbortController()
