@@ -190,7 +190,7 @@ export function FullReportPDF({
           <Text style={styles.empty}>No discrepancies detected for this interview.</Text>
         ) : (
           discrepancies.map((d, i) => {
-            const severity = d.severity ?? 'medium'
+            const severity = d.severity
             const severityColors = SEVERITY_COLORS[severity] ?? SEVERITY_COLORS.medium
             return (
               <View key={i} style={[styles.discrepancyCard, { borderLeftColor: severityColors.border }]}>

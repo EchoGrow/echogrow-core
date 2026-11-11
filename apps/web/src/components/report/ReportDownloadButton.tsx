@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button } from '../ui'
+import { Button, toast } from '../ui'
 import { getDiscrepancies, getRoadmap } from '../../lib/api'
 import type { ScorecardResponse } from '../../lib/api'
 import { downloadFullReportPDF } from '../../lib/export/exportFullReport'
@@ -11,13 +11,16 @@ export interface ReportDownloadButtonProps {
   scorecard: ScorecardResponse
 }
 
-export function ReportDownloadButton({ interviewId, candidateName, interviewDate, scorecard }: ReportDownloadButtonProps) {
+export function ReportDownloadButton({
+  interviewId,
+  candidateName,
+  interviewDate,
+  scorecard,
+}: ReportDownloadButtonProps) {
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
   const handleDownload = async () => {
     setLoading(true)
-    setError(null)
     try {
       const [discrepancies, roadmap] = await Promise.all([
         getDiscrepancies(interviewId),
@@ -30,19 +33,22 @@ export function ReportDownloadButton({ interviewId, candidateName, interviewDate
         discrepancies,
         roadmap,
       )
+      toast.success('Report downloaded', {
+        description: 'Ready to share with the candidate.',
+      })
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not generate the report.')
+      toast.error('Could not generate the report', {
+        description:
+          cause instanceof Error ? cause.message : 'Unknown error',
+      })
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="flex flex-col items-end gap-1">
-      <Button size="sm" variant="secondary" onClick={handleDownload} loading={loading}>
-        Download full report
-      </Button>
-      {error ? <span className="text-xs text-danger-600 dark:text-danger-400">{error}</span> : null}
-    </div>
+    <Button size="sm" variant="secondary" onClick={handleDownload} loading={loading}>
+      Download full report
+    </Button>
   )
 }

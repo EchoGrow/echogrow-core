@@ -1,5 +1,4 @@
 import { pdf } from '@react-pdf/renderer'
-import React from 'react'
 import { FullReportPDF } from './FullReportPDF'
 import type { ScorecardResponse, DiscrepancyResponse, RoadmapResponse } from '../api'
 
@@ -32,17 +31,22 @@ export async function downloadFullReportPDF(
   }
 
   try {
+    // Use JSX so TypeScript can infer the correct element type.
+    // React.createElement(FullReportPDF, {...}) fails because pdf()
+    // expects ReactElement<DocumentProps>, and FullReportPDF has
+    // FullReportProps (which extends DocumentProps via its return type).
+    // JSX avoids this mismatch and removes the need for `as any`.
     const blob = await pdf(
-      React.createElement(FullReportPDF, {
-        candidateName: scorecard.candidateName || candidateName,
-        interviewDate: scorecard.interviewDate || interviewDate,
-        dimensions: scorecard.dimensions,
-        overallConfidence: scorecard.overallConfidence,
-        pendingDiscrepancies: scorecard.pendingDiscrepancies,
-        skillGaps: scorecard.skillGaps,
-        discrepancies: discrepancies.discrepancies,
-        roadmap,
-      }) as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+      <FullReportPDF
+        candidateName={scorecard.candidateName || candidateName}
+        interviewDate={scorecard.interviewDate || interviewDate}
+        dimensions={scorecard.dimensions}
+        overallConfidence={scorecard.overallConfidence}
+        pendingDiscrepancies={scorecard.pendingDiscrepancies}
+        skillGaps={scorecard.skillGaps}
+        discrepancies={discrepancies.discrepancies}
+        roadmap={roadmap}
+      />,
     ).toBlob()
 
     const url = URL.createObjectURL(blob)

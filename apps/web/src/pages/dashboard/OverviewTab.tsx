@@ -302,6 +302,7 @@ function PageHeading({
 
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           {spkExportButton}
+          {action} 
           <span className="inline-flex shrink-0 items-center gap-2 rounded-full border border-success-500/30 bg-success-50 px-3 py-1.5 text-xs font-medium text-success-700 dark:bg-success-500/10 dark:text-success-500">
             <span className="relative flex h-2 w-2">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success-500 opacity-75" />
@@ -309,7 +310,6 @@ function PageHeading({
             </span>
             Ready for review
           </span>
-          {action}
         </div>
       </div>
     </motion.header>
