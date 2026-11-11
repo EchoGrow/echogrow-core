@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FileText, MessageSquare, AlertTriangle, CheckCircle2, XCircle, ChevronDown, Quote } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import { Button, Card } from '../ui'
 import type { DiscrepancyRecord, DiscrepancyStatus } from '../../lib/api'
@@ -8,7 +9,7 @@ import { fadeUp } from '../../lib/animations'
 
 const STATUS_STYLES: Record<
   DiscrepancyStatus,
-  { label: string; badge: string; dot: string }
+  { label: string; badge: string; dot: string; border: string; icon: LucideIcon }
 > = {
   pending: {
     label: 'Pending review',

@@ -105,6 +105,8 @@ export interface FailedResponse {
 
 export type DiscrepancyStatus = 'pending' | 'confirmed' | 'dismissed'
 
+export type DiscrepancySeverity = 'low' | 'medium' | 'high'
+
 export interface DiscrepancyRecord {
   id: string
   field: string
@@ -113,6 +115,7 @@ export interface DiscrepancyRecord {
   cvQuote: string
   interviewQuote: string
   confidence: number
+  severity?: DiscrepancySeverity
   action: 'flag_for_human_review'
   status: DiscrepancyStatus
 }
@@ -275,6 +278,7 @@ const MOCK_DISCREPANCIES: DiscrepancyRecord[] = [
     cvQuote: '5+ years building backend services in Node.js.',
     interviewQuote: 'I have been doing backend work for about 3 years now.',
     confidence: 0.86,
+    severity: 'high',
     action: 'flag_for_human_review',
     status: 'pending',
   },
@@ -286,6 +290,7 @@ const MOCK_DISCREPANCIES: DiscrepancyRecord[] = [
     cvQuote: 'Led a team of 6 engineers delivering the checkout service.',
     interviewQuote: 'I was part of the team; we were 6 people.',
     confidence: 0.71,
+    severity: 'medium',
     action: 'flag_for_human_review',
     status: 'pending',
   },
@@ -343,12 +348,12 @@ async function mockGetScorecard(interviewId: string): Promise<ScorecardResponse>
   } as ScorecardResponse
 }
 
-async function mockGetDiscrepancies(_: string): Promise<DiscrepancyResponse> {
+async function mockGetDiscrepancies(): Promise<DiscrepancyResponse> {
   await new Promise((resolve) => setTimeout(resolve, 300))
   return { discrepancies: MOCK_DISCREPANCIES }
 }
 
-async function mockGetRoadmap(_: string): Promise<RoadmapResponse> {
+async function mockGetRoadmap(): Promise<RoadmapResponse> {
   await new Promise((resolve) => setTimeout(resolve, 300))
   return MOCK_ROADMAP
 }
@@ -426,7 +431,7 @@ export async function getScorecard(interviewId: string): Promise<ScorecardRespon
 }
 
 export async function getDiscrepancies(interviewId: string): Promise<DiscrepancyResponse> {
-  if (USE_MOCK) return mockGetDiscrepancies(interviewId)
+  if (USE_MOCK) return mockGetDiscrepancies()
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
 
@@ -548,7 +553,7 @@ export async function rejectInterview(interviewId: string): Promise<{ interviewI
 // Roadmap API
 // ============================================================
 export async function getRoadmap(interviewId: string): Promise<RoadmapResponse> {
-  if (USE_MOCK) return mockGetRoadmap(interviewId)
+  if (USE_MOCK) return mockGetRoadmap()
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 

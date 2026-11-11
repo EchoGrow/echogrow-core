@@ -57,7 +57,9 @@ const styles = StyleSheet.create({
   dimReason: { fontSize: 9, color: COLORS.navyMid, lineHeight: 1.4, marginTop: 2 },
   dimEvidence: { fontSize: 8.5, color: COLORS.navyMuted, fontStyle: 'italic', marginTop: 3, lineHeight: 1.3 },
   discrepancyCard: { marginBottom: 10, padding: 8, backgroundColor: COLORS.surface, borderRadius: 4, borderLeftWidth: 3, borderLeftColor: COLORS.danger },
+  discHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   discField: { fontSize: 10.5, fontWeight: 'bold', color: COLORS.navyDeep, marginBottom: 4 },
+  severityChip: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, fontSize: 7.5, fontWeight: 'bold', letterSpacing: 0.5, borderWidth: 1 },
   discClaims: { flexDirection: 'row', gap: 8, marginBottom: 4 },
   discClaim: { flex: 1, padding: 6, backgroundColor: '#ffffff', borderRadius: 3, borderWidth: 1, borderColor: COLORS.line },
   discLabel: { fontSize: 7.5, color: COLORS.navyMuted, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 2 },
@@ -97,6 +99,12 @@ const PRIORITY_COLORS: Record<string, { bg: string; text: string; border: string
   HIGH: { bg: COLORS.dangerSoft, text: COLORS.danger, border: '#fecaca' },
   MEDIUM: { bg: COLORS.warningSoft, text: '#a16207', border: '#fde68a' },
   LOW: { bg: COLORS.successSoft, text: '#15803d', border: '#bbf7d0' },
+}
+
+const SEVERITY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  high: { bg: COLORS.dangerSoft, text: COLORS.danger, border: COLORS.danger },
+  medium: { bg: COLORS.warningSoft, text: '#a16207', border: COLORS.warning },
+  low: { bg: COLORS.successSoft, text: '#15803d', border: COLORS.success },
 }
 
 export function FullReportPDF({
@@ -181,26 +189,44 @@ export function FullReportPDF({
         {discrepancies.length === 0 ? (
           <Text style={styles.empty}>No discrepancies detected for this interview.</Text>
         ) : (
-          discrepancies.map((d, i) => (
-            <View key={i} style={styles.discrepancyCard}>
-              <Text style={styles.discField}>{d.field}</Text>
-              <View style={styles.discClaims}>
-                <View style={styles.discClaim}>
-                  <Text style={styles.discLabel}>CV says</Text>
-                  <Text style={styles.discText}>{d.cvSays}</Text>
+          discrepancies.map((d, i) => {
+            const severity = d.severity ?? 'medium'
+            const severityColors = SEVERITY_COLORS[severity] ?? SEVERITY_COLORS.medium
+            return (
+              <View key={i} style={[styles.discrepancyCard, { borderLeftColor: severityColors.border }]}>
+                <View style={styles.discHeader}>
+                  <Text style={styles.discField}>{d.field}</Text>
+                  <Text
+                    style={[
+                      styles.severityChip,
+                      {
+                        backgroundColor: severityColors.bg,
+                        color: severityColors.text,
+                        borderColor: severityColors.border,
+                      },
+                    ]}
+                  >
+                    {severity.toUpperCase()} SEVERITY
+                  </Text>
                 </View>
-                <View style={styles.discClaim}>
-                  <Text style={styles.discLabel}>Interview says</Text>
-                  <Text style={styles.discText}>{d.interviewSays}</Text>
+                <View style={styles.discClaims}>
+                  <View style={styles.discClaim}>
+                    <Text style={styles.discLabel}>CV says</Text>
+                    <Text style={styles.discText}>{d.cvSays}</Text>
+                  </View>
+                  <View style={styles.discClaim}>
+                    <Text style={styles.discLabel}>Interview says</Text>
+                    <Text style={styles.discText}>{d.interviewSays}</Text>
+                  </View>
                 </View>
+                <Text style={{ fontSize: 8, color: COLORS.navyMuted, marginBottom: 2 }}>
+                  Confidence: {Math.round(d.confidence * 100)}% · Status: {d.status}
+                </Text>
+                {d.cvQuote ? <Text style={styles.discQuote}>CV: “{d.cvQuote}”</Text> : null}
+                {d.interviewQuote ? <Text style={styles.discQuote}>Interview: “{d.interviewQuote}”</Text> : null}
               </View>
-              <Text style={{ fontSize: 8, color: COLORS.navyMuted, marginBottom: 2 }}>
-                Confidence: {Math.round(d.confidence * 100)}% · Status: {d.status}
-              </Text>
-              {d.cvQuote ? <Text style={styles.discQuote}>CV: “{d.cvQuote}”</Text> : null}
-              {d.interviewQuote ? <Text style={styles.discQuote}>Interview: “{d.interviewQuote}”</Text> : null}
-            </View>
-          ))
+            )
+          })
         )}
         <Text style={styles.footer} fixed>{footerText}</Text>
       </Page>
