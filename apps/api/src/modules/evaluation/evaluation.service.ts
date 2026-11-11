@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { LlmService } from '../llm/llm.service';
-import { EvaluationSchema } from '@echogrow/shared';
+import { EvaluationSchema, InterviewStatus } from '@echogrow/shared';
 import { buildEvaluationPrompt } from './evaluation.prompts';
 
 @Injectable()
@@ -13,14 +13,41 @@ export class EvaluationService {
     private readonly llm: LlmService,
   ) {}
 
-  async updateStatus(
+  /**
+   * Updates the interview session's overall status AND the per-step boolean
+   * flags that the frontend polls. Both are updated together so the UI never
+   * sees an inconsistent snapshot.
+   *
+   * Example:
+   *   updateProgress(id, 'SCORED', { isScored: true }) →
+   *     status = SCORED, isScored = true (isVerified/isPlanned untouched)
+   *
+   *   updateProgress(id, 'COMPLETED', { isScored: true, isVerified: true, isPlanned: true }) →
+   *     status = COMPLETED, all flags = true, completedAt = now()
+   */
+  async updateProgress(
     interviewId: string,
-    status: 'PROCESSING' | 'SCORED' | 'COMPLETED' | 'FAILED' | 'NEEDS_REVIEW' | 'REJECTED',
-  ) {
+    status: InterviewStatus,
+    flags: { isScored?: boolean; isVerified?: boolean; isPlanned?: boolean } = {},
+  ): Promise<void> {
     await this.prisma.interviewSession.update({
       where: { id: interviewId },
-      data: { status },
+      data: {
+        status,
+        ...flags,
+        ...(status === 'COMPLETED' ? { completedAt: new Date() } : {}),
+      },
     });
+  }
+
+  /**
+   * Backwards-compatible wrapper. Kept for existing call sites.
+   */
+  async updateStatus(
+    interviewId: string,
+    status: InterviewStatus,
+  ): Promise<void> {
+    await this.updateProgress(interviewId, status);
   }
 
   async evaluate(transcript: string, resume: string): Promise<any> {
@@ -28,10 +55,6 @@ export class EvaluationService {
     return await this.llm.generate(prompt, EvaluationSchema);
   }
 
-  /**
-   * Idempotent: safe to call multiple times for the same interview.
-   * If a scorecard exists, it deletes its dimensions and recreates them.
-   */
   async saveScorecard(interviewId: string, evaluation: any): Promise<{ scorecardId: string }> {
     const overallScore =
       evaluation.dimensions.reduce((sum: number, d: any) => sum + d.score, 0) / 4;
@@ -81,11 +104,6 @@ export class EvaluationService {
     return { scorecardId: scorecard.id };
   }
 
-  /**
-   * Computes and persists the time-saved snapshot for an interview.
-   * Called once when the pipeline reaches COMPLETED.
-   * Idempotent: safe to call multiple times (uses update).
-   */
   async saveTimeSaved(
     interviewId: string,
     params: {

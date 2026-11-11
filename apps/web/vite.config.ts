@@ -1,6 +1,6 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -17,29 +17,51 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id: string) {
-          if (id.includes('node_modules')) {
-            // مكتبة الحركات
-            if (id.includes('framer-motion')) {
-              return 'framer-motion';
-            }
-            // مكتبة الأيقونات
-            if (id.includes('lucide-react')) {
-              return 'lucide-react';
-            }
-            // مكتبة PDF
-            if (id.includes('pdfjs-dist')) {
-              return 'pdfjs';
-            }
-            // React و React DOM و React Router
-            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
-              return 'react-vendor';
-            }
-            // أي مكتبة أخرى
-            return 'vendor';
+          if (!id.includes('node_modules')) return;
+
+          // ============================================================
+          // 1. PDF generation (heavy, loaded only when exporting)
+          // ============================================================
+          if (id.includes('@react-pdf') || id.includes('pdfkit')) {
+            return 'pdf-renderer';
           }
+
+          // 2. PDF parsing (pdfjs-dist, heavy, loaded only when uploading PDF)
+          if (id.includes('pdfjs-dist')) {
+            return 'pdfjs';
+          }
+
+          // 3. Animations
+          if (id.includes('framer-motion')) {
+            return 'framer-motion';
+          }
+
+          // 4. Icons
+          if (id.includes('lucide-react')) {
+            return 'lucide-react';
+          }
+
+          // 5. Toast notifications (sonner)
+          if (id.includes('sonner')) {
+            return 'sonner';
+          }
+
+          // 6. React core (React + React DOM + React Router)
+          if (
+            id.includes('node_modules/react/') ||
+            id.includes('node_modules/react-dom/') ||
+            id.includes('node_modules/react-router') ||
+            id.includes('node_modules/scheduler/')
+          ) {
+            return 'react-vendor';
+          }
+
+          // 7. Everything else
+          return 'vendor';
         },
       },
     },
-    chunkSizeWarningLimit: 1000, // رفع الحد إلى 1000 كيلوبايت
+    // Raise warning limit slightly (pdf-renderer will still be large)
+    chunkSizeWarningLimit: 1500,
   },
-})
+});

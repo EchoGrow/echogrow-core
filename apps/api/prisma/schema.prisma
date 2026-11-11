@@ -55,8 +55,13 @@ model InterviewSession {
   createdAt            DateTime        @default(now()) @map("created_at")
   updatedAt            DateTime        @updatedAt @map("updated_at")
 
+  // SPK build status
+  spkStatus            String?         @map("spk_status")   // 'pending' | 'building' | 'ready' | 'failed'
+  spkError             String?         @map("spk_error")    @db.Text
+
   candidate Candidate  @relation(fields: [candidateId], references: [id], onDelete: Restrict)
   scorecard Scorecard?
+  spkProfile SpkProfile?
 
   @@index([candidateId])
   @@index([transcriptHash])
@@ -123,16 +128,26 @@ enum DiscrepancyStatus {
   @@map("discrepancy_status")
 }
 
+enum DiscrepancySeverity {
+  LOW
+  MEDIUM
+  HIGH
+
+  @@map("discrepancy_severity")
+}
+
 model Discrepancy {
-  id             String            @id @default(cuid())
-  scorecardId    String            @map("scorecard_id")
-  claim          String            @db.Text
-  cvQuote        String?           @map("cv_quote") @db.Text
-  interviewQuote String?           @map("interview_quote") @db.Text
+  id             String              @id @default(cuid())
+  scorecardId    String              @map("scorecard_id")
+  claim          String              @db.Text
+  cvQuote        String?             @map("cv_quote") @db.Text
+  interviewQuote String?             @map("interview_quote") @db.Text
   confidence     Float?
-  status         DiscrepancyStatus @default(PENDING)
-  reviewedAt     DateTime?         @map("reviewed_at")
-  createdAt      DateTime          @default(now()) @map("created_at")
+  status         DiscrepancyStatus   @default(PENDING)
+  severity       DiscrepancySeverity @default(MEDIUM)
+  reviewerNotes  String?             @db.Text
+  reviewedAt     DateTime?           @map("reviewed_at")
+  createdAt      DateTime            @default(now()) @map("created_at")
 
   scorecard Scorecard @relation(fields: [scorecardId], references: [id], onDelete: Cascade)
 
@@ -189,4 +204,31 @@ model RoadmapItem {
 
   @@index([roadmapId])
   @@map("roadmap_items")
+}
+
+// SpkProfile (Simera SPK export snapshot)
+model SpkProfile {
+  id          String   @id @default(cuid())
+  interviewId String   @unique @map("interview_id")
+
+  // Metadata extracted once by LLM
+  seniority         String?  @map("seniority")
+  primaryRole       String?  @map("primary_role")
+  timezone          String?  @map("timezone")
+  languages         Json?    @map("languages")           // string[]
+  yearsOfExperience Int?     @map("years_of_experience")
+
+  // Snapshot of full SPK payload (JSONB)
+  spkPayload    Json     @map("spk_payload")
+
+  // Versioning for future schema changes
+  schemaVersion String   @default("1.0.0") @map("schema_version")
+
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  interview     InterviewSession @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+
+  @@index([interviewId])
+  @@map("spk_profiles")
 }

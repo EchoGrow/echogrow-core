@@ -8,11 +8,18 @@ import { LlmService } from '../llm/llm.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { buildDiscrepancyPrompt } from './discrepancy.prompts';
 import {
+  DiscrepancyItem,
   DiscrepancyResponseSchema,
   DiscrepancyStatusResponseSchema,
   DiscrepancyStatusUpdate,
   DiscrepancyStatusUpdateSchema,
 } from '@echogrow/shared';
+
+const SEVERITY_MAP = {
+  low: 'LOW',
+  medium: 'MEDIUM',
+  high: 'HIGH',
+} as const;
 
 @Injectable()
 export class DiscrepancyService {
@@ -23,7 +30,7 @@ export class DiscrepancyService {
     private readonly prisma: PrismaService,
   ) {}
 
-  async detect(cv: string, transcript: string): Promise<any[]> {
+  async detect(cv: string, transcript: string): Promise<DiscrepancyItem[]> {
     const prompt = buildDiscrepancyPrompt(cv, transcript);
     const result = await this.llm.generate(prompt, DiscrepancyResponseSchema);
     this.logger.log(`Detected ${result.discrepancies.length} discrepancies`);
@@ -36,7 +43,7 @@ export class DiscrepancyService {
    */
   async saveDiscrepancies(
     scorecardId: string,
-    discrepancies: any[],
+    discrepancies: DiscrepancyItem[],
   ): Promise<void> {
     const deleted = await this.prisma.discrepancy.deleteMany({
       where: { scorecardId, status: 'PENDING' },
@@ -61,10 +68,16 @@ export class DiscrepancyService {
         interviewQuote: d.interviewQuote,
         confidence: d.confidence,
         status: 'PENDING',
+        severity: SEVERITY_MAP[d.severity],
+        // Note: reviewerNotes is intentionally NOT set here.
+        // New discrepancies always start without notes; notes are added
+        // by the reviewer via PATCH /discrepancies/:id.
       })),
     });
 
-    this.logger.log(`[Discrepancy] Saved ${discrepancies.length} new discrepancies.`);
+    this.logger.log(
+      `[Discrepancy] Saved ${discrepancies.length} new discrepancies.`,
+    );
   }
 
   async updateStatus(id: string, body: DiscrepancyStatusUpdate) {
@@ -90,6 +103,9 @@ export class DiscrepancyService {
       data: {
         status: parsed.data.status.toUpperCase() as 'CONFIRMED' | 'DISMISSED',
         reviewedAt: new Date(),
+        // If reviewerNotes was omitted from the request, clear it (null).
+        // If it was provided, use the provided value.
+        reviewerNotes: parsed.data.reviewerNotes ?? null,
       },
     });
 
