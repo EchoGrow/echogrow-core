@@ -463,20 +463,24 @@ export class InterviewsService {
     }
 
     const response = {
-      discrepancies: (session.scorecard?.discrepancies ?? []).map((discrepancy) => ({
-        id: discrepancy.id,
-        field: discrepancy.claim,
-        cvSays: discrepancy.cvQuote ?? 'Not provided',
-        interviewSays: discrepancy.interviewQuote ?? 'Not provided',
-        cvQuote: discrepancy.cvQuote ?? undefined,
-        interviewQuote: discrepancy.interviewQuote ?? undefined,
-        confidence: discrepancy.confidence ?? 0,
-        status:
-          DISCREPANCY_STATUS_MAP[
-            discrepancy.status as keyof typeof DISCREPANCY_STATUS_MAP
-          ] || 'pending',
-        action: 'flag_for_human_review' as const,
-      })),
+      discrepancies: (session.scorecard?.discrepancies ?? []).map(
+        (discrepancy) => ({
+          id: discrepancy.id,
+          field: discrepancy.claim,
+          cvSays: discrepancy.cvQuote ?? 'Not provided',
+          interviewSays: discrepancy.interviewQuote ?? 'Not provided',
+          cvQuote: discrepancy.cvQuote ?? undefined,
+          interviewQuote: discrepancy.interviewQuote ?? undefined,
+          confidence: discrepancy.confidence ?? 0,
+          status:
+            DISCREPANCY_STATUS_MAP[
+              discrepancy.status as keyof typeof DISCREPANCY_STATUS_MAP
+            ] || 'pending',
+          action: 'flag_for_human_review' as const,
+          severity: discrepancy.severity.toLowerCase(),
+          reviewerNotes: discrepancy.reviewerNotes,
+        }),
+      ),
     };
 
     return DiscrepancySchema.parse(response);

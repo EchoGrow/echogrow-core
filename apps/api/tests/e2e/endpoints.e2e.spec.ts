@@ -92,6 +92,14 @@ describe('E2E: REST endpoints (no LLM calls)', () => {
       expect(candidates).toBe(1);
       expect(sessions).toBeGreaterThanOrEqual(2);
     }, 60_000);
+
+    it('returns 429 Too Many Requests when rate limit is exceeded', async () => {
+      for (let i = 0; i < 10; i++) {
+        await api().post('/interviews/upload').send(valid);
+      }
+
+      await api().post('/interviews/upload').send(valid).expect(429);
+    });
   });
 
   // ============================================================
@@ -258,6 +266,7 @@ describe('E2E: REST endpoints (no LLM calls)', () => {
         expect(d.confidence).toBe(0.9);
         expect(d.status).toBe('pending');
         expect(d.action).toBe('flag_for_human_review');
+        expect(['low', 'medium', 'high']).toContain(d.severity);
       }
     });
   });
@@ -281,9 +290,35 @@ describe('E2E: REST endpoints (no LLM calls)', () => {
       expect(body.status).toBe('CONFIRMED');
       expect(body.reviewedAt).toBeTruthy();
 
-      const db = await prisma.discrepancy.findUnique({ where: { id: discrepancyIds[0] } });
+      const db = await prisma.discrepancy.findUnique({
+        where: { id: discrepancyIds[0] },
+      });
       expect(db?.status).toBe('CONFIRMED');
       expect(db?.reviewedAt).toBeTruthy();
+    });
+
+    it('saves reviewer notes when confirming a discrepancy', async () => {
+      const { discrepancyIds } = await setup();
+
+      const reviewerNotes = 'Candidate admitted this in a follow-up call.';
+
+      const { body } = await api()
+        .patch(`/discrepancies/${discrepancyIds[0]}`)
+        .send({
+          status: 'confirmed',
+          reviewerNotes,
+        })
+        .expect(200);
+
+      expect(body.status).toBe('CONFIRMED');
+      expect(body.reviewerNotes).toBe(reviewerNotes);
+
+      const db = await prisma.discrepancy.findUnique({
+        where: { id: discrepancyIds[0] },
+      });
+
+      expect(db?.status).toBe('CONFIRMED');
+      expect(db?.reviewerNotes).toBe(reviewerNotes);
     });
 
     it('dismisses a discrepancy', async () => {

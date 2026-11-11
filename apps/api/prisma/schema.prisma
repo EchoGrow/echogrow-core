@@ -128,16 +128,26 @@ enum DiscrepancyStatus {
   @@map("discrepancy_status")
 }
 
+enum DiscrepancySeverity {
+  LOW
+  MEDIUM
+  HIGH
+
+  @@map("discrepancy_severity")
+}
+
 model Discrepancy {
-  id             String            @id @default(cuid())
-  scorecardId    String            @map("scorecard_id")
-  claim          String            @db.Text
-  cvQuote        String?           @map("cv_quote") @db.Text
-  interviewQuote String?           @map("interview_quote") @db.Text
+  id             String              @id @default(cuid())
+  scorecardId    String              @map("scorecard_id")
+  claim          String              @db.Text
+  cvQuote        String?             @map("cv_quote") @db.Text
+  interviewQuote String?             @map("interview_quote") @db.Text
   confidence     Float?
-  status         DiscrepancyStatus @default(PENDING)
-  reviewedAt     DateTime?         @map("reviewed_at")
-  createdAt      DateTime          @default(now()) @map("created_at")
+  status         DiscrepancyStatus   @default(PENDING)
+  severity       DiscrepancySeverity @default(MEDIUM)
+  reviewerNotes  String?             @db.Text
+  reviewedAt     DateTime?           @map("reviewed_at")
+  createdAt      DateTime            @default(now()) @map("created_at")
 
   scorecard Scorecard @relation(fields: [scorecardId], references: [id], onDelete: Cascade)
 
