@@ -30,7 +30,7 @@ export class DiscrepancyService {
     private readonly prisma: PrismaService,
   ) {}
 
-  async detect(cv: string, transcript: string): Promise<any[]> {
+  async detect(cv: string, transcript: string): Promise<DiscrepancyItem[]> {
     const prompt = buildDiscrepancyPrompt(cv, transcript);
     const result = await this.llm.generate(prompt, DiscrepancyResponseSchema);
     this.logger.log(`Detected ${result.discrepancies.length} discrepancies`);
@@ -68,7 +68,10 @@ export class DiscrepancyService {
         interviewQuote: d.interviewQuote,
         confidence: d.confidence,
         status: 'PENDING',
-        severity: SEVERITY_MAP[d.severity as keyof typeof SEVERITY_MAP],
+        severity: SEVERITY_MAP[d.severity],
+        // Note: reviewerNotes is intentionally NOT set here.
+        // New discrepancies always start without notes; notes are added
+        // by the reviewer via PATCH /discrepancies/:id.
       })),
     });
 
@@ -100,7 +103,9 @@ export class DiscrepancyService {
       data: {
         status: parsed.data.status.toUpperCase() as 'CONFIRMED' | 'DISMISSED',
         reviewedAt: new Date(),
-        reviewerNotes: parsed.data.reviewerNotes,
+        // If reviewerNotes was omitted from the request, clear it (null).
+        // If it was provided, use the provided value.
+        reviewerNotes: parsed.data.reviewerNotes ?? null,
       },
     });
 

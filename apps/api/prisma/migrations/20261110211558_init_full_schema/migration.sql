@@ -11,6 +11,9 @@ CREATE TYPE "dimension_type" AS ENUM ('TECHNICAL_DEPTH', 'COMMUNICATION', 'DOMAI
 CREATE TYPE "discrepancy_status" AS ENUM ('PENDING', 'CONFIRMED', 'DISMISSED');
 
 -- CreateEnum
+CREATE TYPE "discrepancy_severity" AS ENUM ('LOW', 'MEDIUM', 'HIGH');
+
+-- CreateEnum
 CREATE TYPE "skill_gap_priority" AS ENUM ('LOW', 'MEDIUM', 'HIGH');
 
 -- CreateTable
@@ -84,6 +87,8 @@ CREATE TABLE "discrepancies" (
     "interview_quote" TEXT,
     "confidence" DOUBLE PRECISION,
     "status" "discrepancy_status" NOT NULL DEFAULT 'PENDING',
+    "severity" "discrepancy_severity" NOT NULL DEFAULT 'MEDIUM',
+    "reviewerNotes" TEXT,
     "reviewed_at" TIMESTAMP(3),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 

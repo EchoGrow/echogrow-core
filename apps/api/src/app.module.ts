@@ -16,7 +16,14 @@ import { APP_GUARD } from '@nestjs/core';
 
 @Module({
   imports: [
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 10 }]),
+    // Rate limiting: production = 10 req/min per IP. Tests = 1000 (so that
+    // long E2E suites do not trip the limit).
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60_000,
+        limit: process.env.NODE_ENV === 'test' ? 1000 : 10,
+      },
+    ]),
     ConfigModule.forRoot({ isGlobal: true }),
     BullModule.forRootAsync({
       inject: [ConfigService],

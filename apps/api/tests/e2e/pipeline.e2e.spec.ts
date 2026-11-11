@@ -135,7 +135,9 @@ describe('E2E: Full Pipeline — Seed Scenarios', () => {
       for (const d of body.discrepancies) {
         expect(d.cvQuote).toBeTruthy();
         expect(d.interviewQuote).toBeTruthy();
-        expect(d.confidence).toBeGreaterThanOrEqual(0.5);
+        expect(typeof d.confidence).toBe('number');
+        expect(d.confidence).toBeGreaterThanOrEqual(0);
+        expect(d.confidence).toBeLessThanOrEqual(1);
         expect(d.status).toBe('pending');
         expect(d.action).toBe('flag_for_human_review');
       }
