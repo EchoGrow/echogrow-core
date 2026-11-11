@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Sparkles, FileText, FileUser, ArrowRight, CheckCircle2, ShieldAlert, TrendingUp } from 'lucide-react'
+import { Sparkles, FileText, FileUser, ArrowRight, CheckCircle2, ShieldAlert, TrendingUp, Layers } from 'lucide-react'
 import { Logo } from '../components/brand/Logo'
 import { SEO } from '../components/SEO'
 import { ThemeToggle } from '../components/ThemeToggle'
@@ -188,6 +188,12 @@ export function UploadPage() {
           <div className="container-custom flex h-16 items-center justify-between gap-4">
             <Logo size="sm" />
             <div className="flex items-center gap-2">
+              <Link to="/bulk-upload">
+                <Button variant="ghost" size="sm">
+                  <Layers className="mr-2 h-4 w-4" />
+                  Bulk upload
+                </Button>
+              </Link>
               <SampleMenu disabled={submitting} onPick={loadScenario} />
               <ThemeToggle />
             </div>
