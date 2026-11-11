@@ -66,6 +66,8 @@ export interface TimeSavedBreakdown {
   savedSeconds: number;
 }
 
+export type SpkStatus = 'pending' | 'building' | 'ready' | 'failed';
+
 export interface ScoredResponse {
   status: 'scored'
   interviewId: string
@@ -74,8 +76,24 @@ export interface ScoredResponse {
   dimensions: ScorecardDimension[]
   overallConfidence: number
   pendingDiscrepancies: number
+  totalDiscrepancies: number
   skillGaps: number
   timeSaved?: TimeSavedBreakdown
+  spkStatus?: SpkStatus
+  spkError?: string | null
+  // NEW: progress flags.
+  //
+  // The backend moves through SCORED → SCORED → SCORED → COMPLETED as each
+  // pipeline step finishes (scoring, verification, planning). These flags
+  // tell the frontend whether the pipeline is still running so it can keep
+  // polling instead of showing an incomplete report.
+  //
+  // They may be undefined on older payloads; treat undefined as "completed".
+  progress?: {
+    isScored: boolean
+    isVerified: boolean
+    isPlanned: boolean
+  }
 }
 
 export interface FailedResponse {
@@ -130,6 +148,59 @@ export interface RoadmapItemRecord {
 export interface RoadmapResponse {
   gaps: SkillGapRecord[];
   roadmap: RoadmapItemRecord[];
+}
+
+// ============================================================
+// SPK Export Types
+// ============================================================
+export interface SpkDimension {
+  name: string;
+  score: number;
+  raw_score: number;
+  reason?: string;
+  evidence_quote?: string;
+  evidence_timestamp?: string;
+}
+
+export interface SpkDiscrepancy {
+  field: string;
+  cv_says: string;
+  interview_says: string;
+  status: 'pending' | 'confirmed' | 'dismissed';
+  confidence: number;
+}
+
+export interface SpkSkillGap {
+  skill: string;
+  priority: 'LOW' | 'MEDIUM' | 'HIGH';
+}
+
+export interface SpkRoadmapItem {
+  week: number;
+  skill: string;
+  task: string;
+  resource_url?: string | null;
+}
+
+export interface SpkExport {
+  candidate_id: string;
+  candidate_name: string;
+  overall_score: number;
+  confidence: number;
+  dimensions: SpkDimension[];
+  verified_skills: string[];
+  recommended_upskilling: SpkSkillGap[];
+  roadmap: SpkRoadmapItem[];
+  discrepancies: SpkDiscrepancy[];
+  discrepancies_count: number;
+  human_review_status: 'approved' | 'pending' | 'rejected';
+  seniority: string | null;
+  primary_role: string | null;
+  timezone: string | null;
+  languages: string[] | null;
+  years_of_experience: number | null;
+  generated_at: string;
+  schema_version: string;
 }
 
 export class ApiError extends Error {
@@ -503,10 +574,6 @@ export async function getRoadmap(interviewId: string): Promise<RoadmapResponse> 
   }
 }
 
-/**
- * Validates a roadmap response before it is used for export.
- * Throws a descriptive ApiError if the payload is missing or malformed.
- */
 export function validateRoadmapForExport(data: RoadmapResponse | null | undefined): asserts data is RoadmapResponse {
   if (!data) {
     throw new ApiError(
@@ -538,5 +605,56 @@ export function validateRoadmapForExport(data: RoadmapResponse | null | undefine
         'The roadmap contains incomplete items. Please reload and try again.',
       );
     }
+  }
+}
+
+// ============================================================
+// SPK Export API
+// ============================================================
+export async function getSpkExport(interviewId: string): Promise<SpkExport> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/interviews/${encodeURIComponent(interviewId)}/spk-export`,
+      { headers: { Accept: 'application/json' }, signal: controller.signal },
+    );
+
+    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status);
+
+    return (await response.json()) as SpkExport;
+  } catch (cause) {
+    if (cause instanceof ApiError) throw cause;
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw new ApiError('The request timed out. Check your connection and try again.');
+    }
+    throw new ApiError('Could not reach the server. Check your connection and try again.');
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+export async function rebuildSpkProfile(interviewId: string): Promise<{ interviewId: string; status: string }> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/interviews/${encodeURIComponent(interviewId)}/spk-rebuild`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: controller.signal },
+    );
+
+    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status);
+
+    return (await response.json()) as { interviewId: string; status: string };
+  } catch (cause) {
+    if (cause instanceof ApiError) throw cause;
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw new ApiError('The request timed out. Check your connection and try again.');
+    }
+    throw new ApiError('Could not reach the server. Check your connection and try again.');
+  } finally {
+    window.clearTimeout(timeout);
   }
 }

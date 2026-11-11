@@ -3,8 +3,10 @@ import { LlmService } from '../llm/llm.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   buildSkillExtractionPrompt,
+  buildSkillDedupePrompt,
   buildRoadmapFromGapsPrompt,
   SkillExtractionSchema,
+  SkillDedupeSchema,
 } from './roadmap.prompts';
 import { RoadmapGenerationSchema, RoadmapGeneration, whitelist } from '@echogrow/shared';
 
@@ -20,7 +22,7 @@ export class RoadmapService {
   ) {}
 
   async generateAndSave(scorecardId: string): Promise<RoadmapGeneration | null> {
-    // Idempotency: delete any existing roadmap (and its items cascade) and skill gaps
+    // Idempotency: delete any existing roadmap (and its items cascade) and skill gaps.
     const existingRoadmap = await this.prisma.roadmap.findUnique({
       where: { scorecardId },
       select: { id: true },
@@ -38,7 +40,7 @@ export class RoadmapService {
       this.logger.log(`[Roadmap] Deleted ${deletedGaps.count} existing skill gaps`);
     }
 
-    // 1. جلب جميع الأبعاد
+    // 1. Fetch all dimensions.
     const dimensions = await this.prisma.dimension.findMany({
       where: { scorecardId },
       select: {
@@ -55,7 +57,7 @@ export class RoadmapService {
       return null;
     }
 
-    // 2. جلب الـ transcript الكامل
+    // 2. Fetch the full transcript.
     const scorecard = await this.prisma.scorecard.findUnique({
       where: { id: scorecardId },
       include: { interview: { select: { transcript: true } } },
@@ -71,7 +73,7 @@ export class RoadmapService {
       `Analyzing ${dimensions.length} dimensions for skill gaps (multi-pass, transcript=${transcript.length} chars)...`,
     );
 
-    // 3. تجهيز الأدلة
+    // 3. Prepare evidence list.
     const evidenceList = dimensions.map((d) => ({
       dimension: this.mapDimensionType(d.dimensionType),
       quote: (d.evidenceQuote as any)?.quote || 'No evidence provided.',
@@ -79,7 +81,7 @@ export class RoadmapService {
       reason: d.reason || undefined,
     }));
 
-    // 4. Multi-Pass Extraction
+    // 4. Multi-pass extraction.
     const allSkills: string[] = [];
     const totalBatches = Math.ceil(evidenceList.length / this.BATCH_SIZE);
 
@@ -105,7 +107,7 @@ export class RoadmapService {
       }
     }
 
-    // 5. Dedupe
+    // 5. Dedupe by lowercase (exact duplicates).
     const uniqueSkillsMap = new Map<string, string>();
     for (const skill of allSkills) {
       const normalized = skill.trim().toLowerCase();
@@ -121,22 +123,39 @@ export class RoadmapService {
     }
 
     this.logger.log(
-      `Total unique skills extracted: ${uniqueSkills.length}: [${uniqueSkills.join(', ')}]`,
+      `Extracted ${uniqueSkills.length} unique skills (before merge): [${uniqueSkills.join(', ')}]`,
     );
 
-    // 6. توليد Roadmap
+    // 6. Merge by aliases (fast, no LLM).
+    const aliasMerged = this.mergeByAliases(uniqueSkills);
+    this.logger.log(
+      `After alias merge: ${aliasMerged.length} skills: [${aliasMerged.join(', ')}]`,
+    );
+
+    // 7. Merge semantically via LLM (one call, catches what aliases missed).
+    const mergedSkills = await this.dedupeSkillsSemantically(aliasMerged);
+    this.logger.log(
+      `After LLM dedupe: ${mergedSkills.length} skills: [${mergedSkills.join(', ')}]`,
+    );
+
+    if (mergedSkills.length === 0) {
+      this.logger.log(`No skills after dedupe for ${scorecardId}. Skipping roadmap.`);
+      return null;
+    }
+
+    // 8. Generate roadmap using canonical skills.
     const evidenceContext = evidenceList
       .map((e) => `- ${e.dimension} (Score: ${e.score}/5): "${e.quote}"`)
       .join('\n');
 
-    const roadmapPrompt = buildRoadmapFromGapsPrompt(uniqueSkills, evidenceContext);
+    const roadmapPrompt = buildRoadmapFromGapsPrompt(mergedSkills, evidenceContext);
     const roadmapResult = await this.llm.generate(roadmapPrompt, RoadmapGenerationSchema);
 
     this.logger.log(
       `Roadmap generated with ${roadmapResult.gaps.length} gaps and ${roadmapResult.roadmap.length} weeks.`,
     );
 
-    // 7. حفظ SkillGaps
+    // 9. Save SkillGaps.
     const skillGapMap = new Map<string, string>();
 
     for (const gap of roadmapResult.gaps) {
@@ -160,7 +179,7 @@ export class RoadmapService {
       skillGapMap.set(gap, skillGap.id);
     }
 
-    // 8. حفظ Roadmap
+    // 10. Save Roadmap.
     const itemsToCreate = roadmapResult.roadmap.map((item) => {
       const skillGapId =
         skillGapMap.get(item.skillName) || skillGapMap.values().next().value;
@@ -203,6 +222,48 @@ export class RoadmapService {
         return 'Problem Solving';
       default:
         return type;
+    }
+  }
+
+  private mergeByAliases(skills: string[]): string[] {
+    const aliasMap = new Map<string, string>();
+    for (const entry of whitelist) {
+      const canonical = entry.skillName;
+      aliasMap.set(canonical.toLowerCase().trim(), canonical);
+      const aliases = (entry as any).aliases as string[] | undefined;
+      if (Array.isArray(aliases)) {
+        for (const alias of aliases) {
+          aliasMap.set(alias.toLowerCase().trim(), canonical);
+        }
+      }
+    }
+
+    const merged = new Set<string>();
+    for (const skill of skills) {
+      const key = skill.toLowerCase().trim();
+      const canonical = aliasMap.get(key) ?? skill.trim();
+      merged.add(canonical);
+    }
+
+    return Array.from(merged);
+  }
+
+  /**
+   * One-shot LLM dedupe for skills that aliases missed.
+   * Returns the input unchanged if the LLM call fails (non-fatal).
+   */
+  private async dedupeSkillsSemantically(skills: string[]): Promise<string[]> {
+    if (skills.length <= 1) return skills;
+
+    try {
+      const prompt = buildSkillDedupePrompt(skills);
+      const result = await this.llm.generate(prompt, SkillDedupeSchema);
+      return result.canonical_skills;
+    } catch (err: any) {
+      this.logger.warn(
+        `[Roadmap] LLM dedupe failed: ${err.message}. Falling back to aliases-only.`,
+      );
+      return skills;
     }
   }
 
