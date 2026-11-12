@@ -1,13 +1,6 @@
 import { whitelist } from '@echogrow/shared';
 import { z } from 'zod';
 
-interface DimensionWithEvidence {
-  name: string;
-  score: number;
-  evidenceQuote: string;
-  reason?: string;
-}
-
 export const SkillExtractionSchema = z.object({
   skills: z.array(z.string().min(1)),
 });

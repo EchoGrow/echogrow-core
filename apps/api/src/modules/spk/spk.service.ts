@@ -27,13 +27,6 @@ const SCHEMA_VERSION = '1.0.0';
 @Injectable()
 export class SpkService {
   private readonly logger = new Logger(SpkService.name);
-
-  /**
-   * In-memory guard: prevents two concurrent rebuilds for the same interview.
-   * If a rebuild is already running, subsequent calls are no-ops.
-   * This is per-instance; with multiple instances, the DB status field also
-   * guards it (buildSpkProfile returns early if status is 'building').
-   */
   private readonly inFlightRebuilds = new Set<string>();
 
   constructor(
@@ -79,15 +72,12 @@ export class SpkService {
         return;
       }
 
-      // Mark as building so the frontend can poll for progress.
       await this.prisma.interviewSession.update({
         where: { id: interviewId },
         data: { spkStatus: 'building', spkError: null },
       });
 
       try {
-        const scorecard = session.scorecard;
-
         // LLM Call #1: metadata. Fail-fast.
         this.logger.log(`[SPK] Extracting metadata for ${interviewId}...`);
         const metadataPrompt = buildSpkMetadataPrompt(session.resume, session.transcript);
@@ -208,7 +198,6 @@ export class SpkService {
       );
     }
 
-    // If a rebuild is already running, don't start another.
     if (session.spkStatus === 'building') {
       this.logger.warn(
         `[SPK] Rebuild already running for ${interviewId}. Skipping duplicate.`,
