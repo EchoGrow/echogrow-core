@@ -6,8 +6,8 @@ import {
   StyleSheet,
   Link,
   Image,
-} from '@react-pdf/renderer';
-import type { RoadmapResponse } from '../api';
+} from '@react-pdf/renderer'
+import type { RoadmapResponse } from '../api'
 
 const COLORS = {
   navy: '#0e1e37',
@@ -26,13 +26,16 @@ const COLORS = {
   dangerSoft: '#fef2f2',
   success: '#22c55e',
   successSoft: '#f0fdf4',
-};
+}
 
-const PRIORITY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+const PRIORITY_COLORS: Record<
+  string,
+  { bg: string; text: string; border: string }
+> = {
   HIGH: { bg: COLORS.dangerSoft, text: COLORS.danger, border: '#fecaca' },
   MEDIUM: { bg: COLORS.warningSoft, text: '#a16207', border: '#fde68a' },
   LOW: { bg: COLORS.successSoft, text: '#15803d', border: '#bbf7d0' },
-};
+}
 
 const styles = StyleSheet.create({
   page: {
@@ -70,7 +73,7 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
 
-  // Title section
+  // Title
   titleSection: {
     marginBottom: 20,
   },
@@ -103,7 +106,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 
-  // Gaps
+  // Sections
   section: {
     marginBottom: 16,
   },
@@ -116,18 +119,26 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.line,
   },
+
+  // Gap chips — using View container for proper centering
   gapRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
   },
-  gapChip: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+  gapChipContainer: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'flex-start',
+  },
+  gapChipText: {
     fontSize: 8.5,
     fontWeight: 'bold',
-    borderWidth: 1,
+    textAlign: 'center',
   },
 
   // Week card
@@ -150,14 +161,21 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: COLORS.navyDeep,
   },
-  weekBadge: {
+  // Week badge — View container + Text for proper centering
+  weekBadgeContainer: {
     backgroundColor: COLORS.accent,
-    color: '#ffffff',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
     borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'flex-start',
+  },
+  weekBadgeText: {
+    color: '#ffffff',
     fontSize: 8,
     fontWeight: 'bold',
+    textAlign: 'center',
   },
   task: {
     fontSize: 9.5,
@@ -197,13 +215,13 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     lineHeight: 1.5,
   },
-});
+})
 
 interface RoadmapPDFProps {
-  candidateName: string;
-  interviewDate: string;
-  data: RoadmapResponse;
-  sessionId?: string;
+  candidateName: string
+  interviewDate: string
+  data: RoadmapResponse
+  sessionId?: string
 }
 
 function formatDate(iso: string): string {
@@ -211,14 +229,14 @@ function formatDate(iso: string): string {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
-  });
+  })
 }
 
 function getDocId(sessionId?: string): string {
   if (sessionId) {
-    return sessionId.slice(-8).toUpperCase();
+    return sessionId.slice(-8).toUpperCase()
   }
-  return Date.now().toString(36).toUpperCase().slice(-8);
+  return Date.now().toString(36).toUpperCase().slice(-8)
 }
 
 export function RoadmapPDF({
@@ -227,17 +245,17 @@ export function RoadmapPDF({
   data,
   sessionId,
 }: RoadmapPDFProps) {
-  const { gaps, roadmap } = data;
-  const hasGaps = gaps.length > 0;
-  const generatedAt = new Date();
-  const docId = getDocId(sessionId);
+  const { gaps, roadmap } = data
+  const hasGaps = gaps.length > 0
+  const generatedAt = new Date()
+  const docId = getDocId(sessionId)
 
-  const priorityMap = new Map(gaps.map((g) => [g.skillName, g.priority]));
+  const priorityMap = new Map(gaps.map((g) => [g.skillName, g.priority]))
 
   const logoUrl =
     typeof window !== 'undefined'
       ? `${window.location.origin}/logo.png`
-      : '/logo.png';
+      : '/logo.png'
 
   return (
     <Document
@@ -265,11 +283,15 @@ export function RoadmapPDF({
             </View>
             <View style={styles.metaItem}>
               <Text style={styles.metaLabel}>Interview Date</Text>
-              <Text style={styles.metaValue}>{formatDate(interviewDate)}</Text>
+              <Text style={styles.metaValue}>
+                {formatDate(interviewDate)}
+              </Text>
             </View>
             <View style={styles.metaItem}>
               <Text style={styles.metaLabel}>Generated</Text>
-              <Text style={styles.metaValue}>{formatDate(generatedAt.toISOString())}</Text>
+              <Text style={styles.metaValue}>
+                {formatDate(generatedAt.toISOString())}
+              </Text>
             </View>
             <View style={styles.metaItem}>
               <Text style={styles.metaLabel}>Document ID</Text>
@@ -286,22 +308,26 @@ export function RoadmapPDF({
             </Text>
             <View style={styles.gapRow}>
               {gaps.map((gap, i) => {
-                const colors = PRIORITY_COLORS[gap.priority] ?? PRIORITY_COLORS.MEDIUM;
+                const colors =
+                  PRIORITY_COLORS[gap.priority] ?? PRIORITY_COLORS.MEDIUM
                 return (
-                  <Text
+                  <View
                     key={i}
                     style={[
-                      styles.gapChip,
+                      styles.gapChipContainer,
                       {
                         backgroundColor: colors.bg,
-                        color: colors.text,
                         borderColor: colors.border,
                       },
                     ]}
                   >
-                    {gap.skillName}
-                  </Text>
-                );
+                    <Text
+                      style={[styles.gapChipText, { color: colors.text }]}
+                    >
+                      {gap.skillName}
+                    </Text>
+                  </View>
+                )
               })}
             </View>
           </View>
@@ -314,26 +340,26 @@ export function RoadmapPDF({
               Week-by-Week Plan ({roadmap.length} weeks)
             </Text>
             {roadmap.map((item, i) => {
-              const priority = priorityMap.get(item.skillName) ?? 'MEDIUM';
-              const colors = PRIORITY_COLORS[priority] ?? PRIORITY_COLORS.MEDIUM;
-              const isFallback = item.resourceUrl?.startsWith('https://www.google.com/search');
+              const priority = priorityMap.get(item.skillName) ?? 'MEDIUM'
+              const colors =
+                PRIORITY_COLORS[priority] ?? PRIORITY_COLORS.MEDIUM
+              const isFallback =
+                item.resourceUrl?.startsWith('https://www.google.com/search')
 
               return (
                 <View key={i} style={styles.weekCard} wrap={false}>
                   <View style={styles.weekHeader}>
                     <Text style={styles.skillName}>{item.skillName}</Text>
-                    <Text
+                    <View
                       style={[
-                        styles.gapChip,
-                        {
-                          backgroundColor: colors.bg,
-                          color: colors.text,
-                          borderColor: colors.border,
-                        },
+                        styles.weekBadgeContainer,
+                        { backgroundColor: colors.text },
                       ]}
                     >
-                      WEEK {item.week}
-                    </Text>
+                      <Text style={styles.weekBadgeText}>
+                        WEEK {item.week}
+                      </Text>
+                    </View>
                   </View>
                   <Text style={styles.task}>{item.task}</Text>
                   {item.resourceUrl && (
@@ -342,23 +368,25 @@ export function RoadmapPDF({
                     </Link>
                   )}
                 </View>
-              );
+              )
             })}
           </View>
         ) : (
           <Text style={styles.emptyState}>
-            No skill gaps detected. This candidate performed well across all dimensions.
+            No skill gaps detected. This candidate performed well across all
+            dimensions.
           </Text>
         )}
 
         {/* ============ FOOTER ============ */}
         <Text style={styles.footer} fixed>
-          This roadmap is extracted from the candidate's own admissions during the interview — not
-          from a fixed template. Every learning resource comes from a vetted library of official
-          documentation and trusted tutorials.{'\n'}
+          This roadmap is extracted from the candidate's own admissions during
+          the interview — not from a fixed template. Every learning resource
+          comes from a vetted library of official documentation and trusted
+          tutorials.{'\n'}
           Generated by EchoGrow · echogrow.app · Doc ID: {docId}
         </Text>
       </Page>
     </Document>
-  );
+  )
 }

@@ -19,8 +19,9 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { SEO } from '../../components/SEO';
-import { Alert, Button, Card, toast } from '../../components/ui';
+import { Button, Card, toast } from '../../components/ui';
 import { ReviewBanner } from '../../components/ui/ReviewBanner';
+import { DashboardErrorState } from '../../components/dashboard/DashboardErrorState';
 import { useScorecard } from '../../lib/scorecard/useScorecard';
 import {
   getRoadmap,
@@ -37,9 +38,6 @@ import {
 import { fadeUp, staggerContainer } from '../../lib/animations';
 import { cn } from '../../lib/cn';
 
-// ============================================================
-// Priority styling
-// ============================================================
 const PRIORITY_STYLES: Record<
   SkillGapPriority,
   { label: string; badge: string; dot: string; border: string }
@@ -67,9 +65,6 @@ const PRIORITY_STYLES: Record<
   },
 };
 
-// ============================================================
-// Loading skeleton
-// ============================================================
 function GrowthPlanSkeleton() {
   return (
     <div className="space-y-6" aria-busy="true" aria-live="polite">
@@ -87,44 +82,6 @@ function GrowthPlanSkeleton() {
   );
 }
 
-// ============================================================
-// Error state
-// ============================================================
-function ErrorState({
-  message,
-  onRetry,
-  interviewId,
-}: {
-  message: string;
-  onRetry: () => void;
-  interviewId: string;
-}) {
-  return (
-    <div className="mx-auto max-w-xl py-8">
-      <Alert
-        variant="error"
-        title="Could not load the growth plan"
-        action={
-          <Button size="sm" variant="secondary" onClick={onRetry}>
-            Try again
-          </Button>
-        }
-      >
-        {message}
-      </Alert>
-      <Link
-        to={`/dashboard/${interviewId}/overview`}
-        className="mt-6 inline-block text-sm font-semibold text-accent-700 hover:underline dark:text-accent-300"
-      >
-        ← Back to overview
-      </Link>
-    </div>
-  );
-}
-
-// ============================================================
-// Empty state (no gaps)
-// ============================================================
 function EmptyState({ interviewId }: { interviewId: string }) {
   return (
     <motion.div variants={fadeUp} className="mx-auto max-w-2xl">
@@ -165,9 +122,6 @@ function EmptyState({ interviewId }: { interviewId: string }) {
   );
 }
 
-// ============================================================
-// Gaps summary card
-// ============================================================
 function GapsSummary({ gaps }: { gaps: { skillName: string; priority: SkillGapPriority }[] }) {
   return (
     <motion.div variants={fadeUp}>
@@ -213,9 +167,6 @@ function GapsSummary({ gaps }: { gaps: { skillName: string; priority: SkillGapPr
   );
 }
 
-// ============================================================
-// Week card (timeline item)
-// ============================================================
 function WeekCard({
   item,
   index,
@@ -315,9 +266,6 @@ function WeekCard({
   );
 }
 
-// ============================================================
-// Export dropdown (with validation + disabled state)
-// ============================================================
 function ExportDropdown({
   candidateName,
   interviewDate,
@@ -333,7 +281,6 @@ function ExportDropdown({
   const [exporting, setExporting] = useState<'pdf' | 'md' | 'json' | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // Can we export? Need data + at least one gap/week.
   const canExport =
     roadmapData !== null &&
     Array.isArray(roadmapData.gaps) &&
@@ -480,12 +427,9 @@ function ExportDropdown({
   );
 }
 
-// ============================================================
-// Main component
-// ============================================================
 export function GrowthPlanTab() {
   const { interviewId = '' } = useParams<{ interviewId: string }>();
-  const { status: scorecardStatus, scorecard } = useScorecard();
+  const { status: scorecardStatus, scorecard, retryAll } = useScorecard();
 
   const [roadmapData, setRoadmapData] = useState<RoadmapResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -524,7 +468,10 @@ export function GrowthPlanTab() {
     };
   }, [interviewId, refreshKey]);
 
-  const handleRetry = () => setRefreshKey((k) => k + 1);
+  const handleRetry = () => {
+    setRefreshKey((k) => k + 1);
+    retryAll();
+  };
 
   if (scorecardStatus === 'needs-review') {
     return (
@@ -548,7 +495,12 @@ export function GrowthPlanTab() {
     return (
       <>
         <SEO title="Growth plan" description="Error loading roadmap." noIndex />
-        <ErrorState message={error} onRetry={handleRetry} interviewId={interviewId} />
+        <DashboardErrorState
+          title="Could not load the growth plan"
+          message={error}
+          onRetry={handleRetry}
+          backHref={`/dashboard/${interviewId}/overview`}
+        />
       </>
     );
   }

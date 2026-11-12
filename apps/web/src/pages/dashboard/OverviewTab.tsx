@@ -26,9 +26,11 @@ import {
   Loader2,
 } from 'lucide-react';
 import { SEO } from '../../components/SEO';
-import { Alert, Button, Card, toast } from '../../components/ui';
+import { Button, Card, toast } from '../../components/ui';
 import { ReviewBanner } from '../../components/ui/ReviewBanner';
+import { DashboardErrorState } from '../../components/dashboard/DashboardErrorState';
 import { ProcessingState } from '../../components/dashboard/ProcessingState';
+import { ReportDownloadButton } from '../../components/report/ReportDownloadButton';
 import { useScorecard } from '../../lib/scorecard/useScorecard';
 import {
   forceEvaluation,
@@ -172,11 +174,13 @@ function PageHeading({
   interviewDate,
   interviewId,
   spkExportButton,
+  action,
 }: {
   candidateName: string;
   interviewDate: string;
   interviewId: string;
   spkExportButton?: React.ReactNode;
+  action?: React.ReactNode;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -297,8 +301,9 @@ function PageHeading({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           {spkExportButton}
+          {action}
           <span className="inline-flex shrink-0 items-center gap-2 rounded-full border border-success-500/30 bg-success-50 px-3 py-1.5 text-xs font-medium text-success-700 dark:bg-success-500/10 dark:text-success-500">
             <span className="relative flex h-2 w-2">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success-500 opacity-75" />
@@ -583,7 +588,7 @@ function TimeSavedCard({ timeSaved }: { timeSaved?: TimeSavedBreakdown }) {
 }
 
 // ============================================================
-// SPK Preview Card (4 states + Retry button when failed)
+// SPK Preview Card
 // ============================================================
 function SpkPreviewCard({
   dimensionsCount,
@@ -604,7 +609,6 @@ function SpkPreviewCard({
   onRebuild: () => void;
   isRebuilding: boolean;
 }) {
-  // State 1: pending (SPK not started yet)
   if (spkStatus === 'pending') {
     return (
       <motion.div variants={fadeUp}>
@@ -634,7 +638,6 @@ function SpkPreviewCard({
     );
   }
 
-  // State 2: building (SPK extraction in progress)
   if (spkStatus === 'building') {
     return (
       <motion.div variants={fadeUp}>
@@ -672,7 +675,6 @@ function SpkPreviewCard({
     );
   }
 
-  // State 3: failed (SPK build failed) → show Retry button
   if (spkStatus === 'failed') {
     return (
       <motion.div variants={fadeUp}>
@@ -714,7 +716,6 @@ function SpkPreviewCard({
     );
   }
 
-  // State 4: ready (SPK built successfully)
   const isApproved = pendingDiscrepancies === 0;
 
   return (
@@ -798,7 +799,7 @@ function SpkPreviewCard({
 }
 
 // ============================================================
-// Download SPK Button (with Rebuild fallback when failed)
+// Download SPK Button
 // ============================================================
 function DownloadSpkButton({
   interviewId,
@@ -852,7 +853,6 @@ function DownloadSpkButton({
     }
   };
 
-  // pending / building → disabled "building..." state
   if (spkStatus === 'pending' || spkStatus === 'building') {
     return (
       <Button
@@ -868,7 +868,6 @@ function DownloadSpkButton({
     );
   }
 
-  // failed → Retry button (rebuild is the way out)
   if (spkStatus === 'failed') {
     return (
       <Button
@@ -886,7 +885,6 @@ function DownloadSpkButton({
     );
   }
 
-  // ready → Export
   return (
     <Button
       variant="secondary"
@@ -1090,77 +1088,6 @@ function OverviewSkeleton() {
 // ============================================================
 // States
 // ============================================================
-function ErrorState({
-  message,
-  onRetry,
-}: {
-  message: string;
-  onRetry: () => void;
-}) {
-  return (
-    <div className="mx-auto max-w-xl py-8">
-      <Alert
-        variant="error"
-        title="Could not load the scorecard"
-        action={
-          <Button size="sm" variant="secondary" onClick={onRetry}>
-            Try again
-          </Button>
-        }
-      >
-        {message}
-      </Alert>
-      <Link
-        to="/upload"
-        className="mt-6 inline-flex items-center gap-1 text-sm font-semibold text-accent-700 hover:underline dark:text-accent-300"
-      >
-        ← Start a new analysis
-      </Link>
-    </div>
-  );
-}
-
-function NotFoundState() {
-  return (
-    <div className="mx-auto max-w-xl py-8">
-      <Alert variant="error" title="Interview not found">
-        This interview does not exist or was removed.
-      </Alert>
-      <Link
-        to="/upload"
-        className="mt-6 inline-flex items-center gap-1 text-sm font-semibold text-accent-700 hover:underline dark:text-accent-300"
-      >
-        ← Start a new analysis
-      </Link>
-    </div>
-  );
-}
-
-function EmptyState({ base }: { base: string }) {
-  return (
-    <div className="mx-auto max-w-xl py-8">
-      <Alert variant="info" title="No dimensions yet">
-        The scorecard was returned without any dimension scores. Re-run the
-        analysis or check the API response for this interview.
-      </Alert>
-      <div className="mt-6 flex flex-wrap gap-3">
-        <Link
-          to="/upload"
-          className="text-sm font-semibold text-accent-700 hover:underline dark:text-accent-300"
-        >
-          ← Start a new analysis
-        </Link>
-        <Link
-          to={`${base}/evaluation`}
-          className="text-sm font-semibold text-accent-700 hover:underline dark:text-accent-300"
-        >
-          Open evaluation →
-        </Link>
-      </div>
-    </div>
-  );
-}
-
 function FailedState({
   interviewId,
   onRetry,
@@ -1224,7 +1151,7 @@ function FailedState({
 export function OverviewTab() {
   const { interviewId = '' } = useParams<{ interviewId: string }>();
   const navigate = useNavigate();
-  const { status, scorecard, error, refresh } = useScorecard();
+  const { status, scorecard, error, refresh, retryAll, setSpkStatus } = useScorecard();
   const base = `/dashboard/${interviewId}`;
 
   const [isRebuilding, setIsRebuilding] = useState(false);
@@ -1239,21 +1166,18 @@ export function OverviewTab() {
     }
   }, [status, navigate]);
 
-  // Rebuild SPK handler — used by the Retry buttons in the SPK card and header.
   const handleRebuildSpk = async () => {
     setIsRebuilding(true);
     try {
+      setSpkStatus('building', null);
       await rebuildSpkProfile(interviewId);
-      toast.success('SPK rebuild started', {
-        description: 'The profile will be regenerated shortly.',
-      });
-      // Refresh scorecard after a short delay to pick up status changes.
-      setTimeout(() => refresh(), 1500);
+      setTimeout(() => refresh(), 1000);
     } catch (cause) {
-      toast.error('Failed to rebuild SPK', {
+      toast.error('Failed to start SPK rebuild', {
         description:
           cause instanceof Error ? cause.message : 'Unknown error',
       });
+      refresh();
     } finally {
       setIsRebuilding(false);
     }
@@ -1319,7 +1243,12 @@ export function OverviewTab() {
           description="Interview not found."
           noIndex
         />
-        <NotFoundState />
+        <DashboardErrorState
+          title="Interview not found"
+          message="This interview does not exist or was removed."
+          onRetry={retryAll}
+          backHref="/upload"
+        />
       </>
     );
   }
@@ -1332,11 +1261,13 @@ export function OverviewTab() {
           description="Candidate scorecard overview."
           noIndex
         />
-        <ErrorState
+        <DashboardErrorState
+          title="Could not load the scorecard"
           message={
             error ?? 'Something went wrong while loading the scorecard.'
           }
-          onRetry={refresh}
+          onRetry={retryAll}
+          backHref="/upload"
         />
       </>
     );
@@ -1386,13 +1317,25 @@ export function OverviewTab() {
               isRebuilding={isRebuilding}
             />
           }
+          action={
+            <ReportDownloadButton
+              interviewId={interviewId}
+              candidateName={candidateName}
+              interviewDate={interviewDate}
+              scorecard={scorecard}
+            />
+          }
         />
 
         {dimensions.length === 0 ? (
-          <EmptyState base={base} />
+          <DashboardErrorState
+            title="No dimensions yet"
+            message="The scorecard was returned without any dimension scores. Re-run the analysis or check the API response for this interview."
+            onRetry={retryAll}
+            backHref="/upload"
+          />
         ) : (
           <>
-            {/* Row 1: 3 cards */}
             <div className="grid gap-4 sm:grid-cols-3">
               <AverageScoreCard
                 average={average}
@@ -1432,7 +1375,6 @@ export function OverviewTab() {
               />
             </div>
 
-            {/* Row 2: Confidence + Time Saved */}
             <div className="grid gap-4 sm:grid-cols-3">
               <StatCard
                 label="Model confidence"
@@ -1446,7 +1388,6 @@ export function OverviewTab() {
               </div>
             </div>
 
-            {/* Row 3: Left column (SPK + Dimensions) | Right column (Next Step) */}
             <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] items-start">
               <div className="flex flex-col gap-4">
                 <SpkPreviewCard

@@ -1,46 +1,37 @@
 import { useState } from 'react';
 import { useScorecard } from '../../lib/scorecard/useScorecard';
-import { Alert, Button, Card } from '../../components/ui';
+import { Card } from '../../components/ui';
 import { Link, useParams } from 'react-router-dom';
 import { ReviewBanner } from '../../components/ui/ReviewBanner';
+import { DashboardErrorState } from '../../components/dashboard/DashboardErrorState';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Quote, ChevronDown } from 'lucide-react';
 import { fadeUp, staggerContainer } from '../../lib/animations';
 import { cn } from '../../lib/cn';
 
-// ============================================================
-// Loading skeleton — matches the 4-card grid
-// ============================================================
 function EvaluationSkeleton() {
   return (
     <div className="space-y-6" aria-busy="true" aria-live="polite">
       <span className="sr-only">Loading evaluation…</span>
 
-      {/* Header */}
       <div>
         <div className="h-3 w-24 rounded skeleton" />
         <div className="mt-2 h-8 w-56 rounded-lg skeleton" />
         <div className="mt-3 h-4 w-full max-w-2xl rounded skeleton" />
       </div>
 
-      {/* 4 dimension cards */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 items-start">
         {[0, 1, 2, 3].map((i) => (
           <div key={i} className="rounded-card border border-line bg-surface-card p-6 min-h-[220px]">
-            {/* Header: name + score badge */}
             <div className="flex items-center justify-between gap-3">
               <div className="h-5 w-36 rounded skeleton" />
               <div className="h-8 w-16 rounded-lg skeleton" />
             </div>
-
-            {/* Reason text */}
             <div className="mt-3 space-y-2">
               <div className="h-4 w-full rounded skeleton" />
               <div className="h-4 w-5/6 rounded skeleton" />
               <div className="h-4 w-2/3 rounded skeleton" />
             </div>
-
-            {/* Footer: toggle */}
             <div className="mt-4 border-t border-line pt-4">
               <div className="flex items-center justify-between">
                 <div className="h-4 w-28 rounded skeleton" />
@@ -56,18 +47,12 @@ function EvaluationSkeleton() {
 
 export function EvaluationTab() {
   const { interviewId = '' } = useParams<{ interviewId: string }>();
-  const { status, scorecard, error, refresh } = useScorecard();
+  const { status, scorecard, error, retryAll } = useScorecard();
 
   const [openDimension, setOpenDimension] = useState<string | null>(null);
 
-  if (status === 'loading') {
+  if (status === 'loading' || status === 'processing') {
     return <EvaluationSkeleton />;
-  }
-
-  if (status === 'processing') {
-    return (
-      <EvaluationSkeleton />
-    );
   }
 
   if (status === 'needs-review') {
@@ -76,21 +61,23 @@ export function EvaluationTab() {
 
   if (status === 'not-found') {
     return (
-      <Alert variant="error" title="Interview not found">
-        This interview does not exist or was removed.
-      </Alert>
+      <DashboardErrorState
+        title="Interview not found"
+        message="This interview does not exist or was removed."
+        onRetry={retryAll}
+        backHref={`/dashboard/${interviewId}/overview`}
+      />
     );
   }
 
   if (status === 'error' || !scorecard || scorecard.status !== 'scored') {
     return (
-      <Alert
-        variant="error"
+      <DashboardErrorState
         title="Could not load the evaluation"
-        action={<Button size="sm" variant="secondary" onClick={refresh}>Retry</Button>}
-      >
-        {error ?? 'Something went wrong.'}
-      </Alert>
+        message={error ?? 'Something went wrong while loading the evaluation.'}
+        onRetry={retryAll}
+        backHref={`/dashboard/${interviewId}/overview`}
+      />
     );
   }
 

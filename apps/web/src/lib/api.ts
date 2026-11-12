@@ -34,7 +34,7 @@ export interface NeedsReviewResponse {
   candidateName: string
   transcript: string
   resume: string
-  structuredTranscript?: any
+  structuredTranscript?: unknown
   confidence: number
   message: string
 }
@@ -80,14 +80,6 @@ export interface ScoredResponse {
   timeSaved?: TimeSavedBreakdown
   spkStatus?: SpkStatus
   spkError?: string | null
-  // NEW: progress flags.
-  //
-  // The backend moves through SCORED → SCORED → SCORED → COMPLETED as each
-  // pipeline step finishes (scoring, verification, planning). These flags
-  // tell the frontend whether the pipeline is still running so it can keep
-  // polling instead of showing an incomplete report.
-  //
-  // They may be undefined on older payloads; treat undefined as "completed".
   progress?: {
     isScored: boolean
     isVerified: boolean
@@ -104,6 +96,8 @@ export interface FailedResponse {
 
 export type DiscrepancyStatus = 'pending' | 'confirmed' | 'dismissed'
 
+export type DiscrepancySeverity = 'low' | 'medium' | 'high'
+
 export interface DiscrepancyRecord {
   id: string
   field: string
@@ -112,8 +106,10 @@ export interface DiscrepancyRecord {
   cvQuote: string
   interviewQuote: string
   confidence: number
+  severity: DiscrepancySeverity 
   action: 'flag_for_human_review'
   status: DiscrepancyStatus
+  reviewerNotes: string | null 
 }
 
 export interface DiscrepancyResponse {
@@ -293,6 +289,10 @@ async function readErrorMessage(response: Response): Promise<string> {
   return fallbackMessage(response.status)
 }
 
+// ============================================================
+// Real API
+// ============================================================
+
 export async function createInterview(input: CreateInterviewRequest): Promise<CreateInterviewResponse> {
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
@@ -451,6 +451,7 @@ export async function getDiscrepancies(interviewId: string): Promise<Discrepancy
 export async function updateDiscrepancyStatus(
   id: string,
   status: Exclude<DiscrepancyStatus, 'pending'>,
+  reviewerNotes?: string,
 ): Promise<void> {
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
@@ -464,7 +465,10 @@ export async function updateDiscrepancyStatus(
           'Content-Type': 'application/json',
           Accept: 'application/json',
         },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({
+          status,
+          ...(reviewerNotes?.trim() ? { reviewerNotes: reviewerNotes.trim() } : {}),
+        }),
         signal: controller.signal,
       },
     )
@@ -627,26 +631,34 @@ export async function getSpkExport(interviewId: string): Promise<SpkExport> {
   }
 }
 
-export async function rebuildSpkProfile(interviewId: string): Promise<{ interviewId: string; status: string }> {
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+export async function rebuildSpkProfile(
+  interviewId: string,
+): Promise<{ interviewId: string; status: string }> {
+  const controller = new AbortController()
+  // 10s is enough to confirm the request reached the server.
+  // The actual rebuild runs in the background and is tracked by polling.
+  const timeout = window.setTimeout(() => controller.abort(), 10_000)
 
   try {
     const response = await fetch(
       `${API_BASE_URL}/interviews/${encodeURIComponent(interviewId)}/spk-rebuild`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: controller.signal },
-    );
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+      },
+    )
 
-    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status);
+    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
 
-    return (await response.json()) as { interviewId: string; status: string };
+    return (await response.json()) as { interviewId: string; status: string }
   } catch (cause) {
-    if (cause instanceof ApiError) throw cause;
+    if (cause instanceof ApiError) throw cause
     if (cause instanceof DOMException && cause.name === 'AbortError') {
-      throw new ApiError('The request timed out. Check your connection and try again.');
+      throw new ApiError('The request timed out. Check your connection and try again.')
     }
-    throw new ApiError('Could not reach the server. Check your connection and try again.');
+    throw new ApiError('Could not reach the server. Check your connection and try again.')
   } finally {
-    window.clearTimeout(timeout);
+    window.clearTimeout(timeout)
   }
 }

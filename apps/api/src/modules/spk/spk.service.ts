@@ -27,6 +27,7 @@ const SCHEMA_VERSION = '1.0.0';
 @Injectable()
 export class SpkService {
   private readonly logger = new Logger(SpkService.name);
+  private readonly inFlightRebuilds = new Set<string>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -34,125 +35,109 @@ export class SpkService {
   ) {}
 
   async buildSpkProfile(interviewId: string): Promise<void> {
-    this.logger.log(`[SPK] Building profile for interview ${interviewId}...`);
-
-    const session = await this.prisma.interviewSession.findUnique({
-      where: { id: interviewId },
-      include: {
-        candidate: true,
-        scorecard: {
-          include: {
-            dimensions: { include: { skillGaps: true } },
-            discrepancies: true,
-            roadmap: { include: { items: { include: { skillGap: true } } } },
-          },
-        },
-      },
-    });
-
-    if (!session) {
-      this.logger.warn(`[SPK] Session ${interviewId} not found.`);
-      throw new NotFoundException('Interview session not found.');
-    }
-
-    if (session.status !== 'COMPLETED' || !session.scorecard) {
+    if (this.inFlightRebuilds.has(interviewId)) {
       this.logger.warn(
-        `[SPK] Session ${interviewId} is not COMPLETED (status: ${session.status}). Skipping.`,
+        `[SPK] Rebuild already in progress for ${interviewId}. Skipping duplicate.`,
       );
       return;
     }
 
-    // Mark as building so the frontend can poll for progress.
-    await this.prisma.interviewSession.update({
-      where: { id: interviewId },
-      data: { spkStatus: 'building', spkError: null },
-    });
+    this.inFlightRebuilds.add(interviewId);
+    this.logger.log(`[SPK] Building profile for interview ${interviewId}...`);
 
     try {
-      // ============================================================
-      // LLM Call #1: extract metadata
-      // ============================================================
-      let metadata: {
-        seniority: string | null;
-        primary_role: string | null;
-        timezone: string | null;
-        languages: string[] | null;
-        years_of_experience: number | null;
-      };
+      const session = await this.prisma.interviewSession.findUnique({
+        where: { id: interviewId },
+        include: {
+          candidate: true,
+          scorecard: {
+            include: {
+              dimensions: { include: { skillGaps: true } },
+              discrepancies: true,
+              roadmap: { include: { items: { include: { skillGap: true } } } },
+            },
+          },
+        },
+      });
+
+      if (!session) {
+        this.logger.warn(`[SPK] Session ${interviewId} not found.`);
+        throw new NotFoundException('Interview session not found.');
+      }
+
+      if (session.status !== 'COMPLETED' || !session.scorecard) {
+        this.logger.warn(
+          `[SPK] Session ${interviewId} is not COMPLETED (status: ${session.status}). Skipping.`,
+        );
+        return;
+      }
+
+      await this.prisma.interviewSession.update({
+        where: { id: interviewId },
+        data: { spkStatus: 'building', spkError: null },
+      });
+
       try {
+        // LLM Call #1: metadata. Fail-fast.
+        this.logger.log(`[SPK] Extracting metadata for ${interviewId}...`);
         const metadataPrompt = buildSpkMetadataPrompt(session.resume, session.transcript);
-        metadata = await this.llm.generate(metadataPrompt, SpkMetadataSchema);
+        const metadata = await this.llm.generate(metadataPrompt, SpkMetadataSchema);
         this.logger.log(`[SPK] Metadata extracted for ${interviewId}`);
-      } catch (err: any) {
-        // ✅ Non-fatal: fall back to nulls so the SPK profile can still be built.
-        this.logger.warn(
-          `[SPK] Metadata extraction failed for ${interviewId}: ${err.message}. Using nulls.`,
-        );
-        metadata = {
-          seniority: null,
-          primary_role: null,
-          timezone: null,
-          languages: null,
-          years_of_experience: null,
-        };
-      }
 
-      // ============================================================
-      // LLM Call #2: extract verified skills
-      // ============================================================
-      let verifiedSkills: string[] = [];
-      try {
+        // LLM Call #2: verified skills. Fail-fast.
+        this.logger.log(`[SPK] Extracting verified skills for ${interviewId}...`);
         const skillsPrompt = buildSpkVerifiedSkillsPrompt(session.transcript);
-        const result = await this.llm.generate(skillsPrompt, SpkVerifiedSkillsSchema);
-        verifiedSkills = result.verified_skills;
-        this.logger.log(`[SPK] ${verifiedSkills.length} verified skills for ${interviewId}`);
-      } catch (err: any) {
-        // ✅ Non-fatal: fall back to empty list so the SPK profile can still be built.
-        this.logger.warn(
-          `[SPK] Verified skills extraction failed for ${interviewId}: ${err.message}. Using empty list.`,
+        const skillsResult = await this.llm.generate(skillsPrompt, SpkVerifiedSkillsSchema);
+        const verifiedSkills = skillsResult.verified_skills;
+        this.logger.log(
+          `[SPK] ${verifiedSkills.length} verified skills extracted for ${interviewId}`,
         );
-        verifiedSkills = [];
+
+        // Build payload.
+        const payload = this.buildPayload(session, metadata, verifiedSkills);
+
+        await this.prisma.spkProfile.upsert({
+          where: { interviewId },
+          create: {
+            interviewId,
+            seniority: metadata.seniority,
+            primaryRole: metadata.primary_role,
+            timezone: metadata.timezone,
+            languages: metadata.languages as any,
+            yearsOfExperience: metadata.years_of_experience,
+            spkPayload: payload as any,
+            schemaVersion: SCHEMA_VERSION,
+          },
+          update: {
+            seniority: metadata.seniority,
+            primaryRole: metadata.primary_role,
+            timezone: metadata.timezone,
+            languages: metadata.languages as any,
+            yearsOfExperience: metadata.years_of_experience,
+            spkPayload: payload as any,
+            schemaVersion: SCHEMA_VERSION,
+          },
+        });
+
+        await this.prisma.interviewSession.update({
+          where: { id: interviewId },
+          data: { spkStatus: 'ready', spkError: null },
+        });
+
+        this.logger.log(`[SPK] Profile saved for ${interviewId}`);
+      } catch (err: any) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger.error(`[SPK] Profile build failed for ${interviewId}: ${message}`);
+
+        await this.prisma.interviewSession.update({
+          where: { id: interviewId },
+          data: { spkStatus: 'failed', spkError: message },
+        });
+
+        throw err;
       }
-
-      // Build payload with conflict resolution + sorted roadmap.
-      const payload = this.buildPayload(session, metadata, verifiedSkills);
-
-      await this.prisma.spkProfile.upsert({
-        where: { interviewId },
-        create: {
-          interviewId,
-          seniority: metadata.seniority,
-          primaryRole: metadata.primary_role,
-          timezone: metadata.timezone,
-          languages: metadata.languages as any,
-          yearsOfExperience: metadata.years_of_experience,
-          spkPayload: payload as any,
-          schemaVersion: SCHEMA_VERSION,
-        },
-        update: {
-          seniority: metadata.seniority,
-          primaryRole: metadata.primary_role,
-          timezone: metadata.timezone,
-          languages: metadata.languages as any,
-          yearsOfExperience: metadata.years_of_experience,
-          spkPayload: payload as any,
-          schemaVersion: SCHEMA_VERSION,
-        },
-      });
-
-      await this.prisma.interviewSession.update({
-        where: { id: interviewId },
-        data: { spkStatus: 'ready', spkError: null },
-      });
-
-      this.logger.log(`[SPK] Profile saved for ${interviewId}`);
-    } catch (err: any) {
-      this.logger.error(`[SPK] Profile build failed for ${interviewId}: ${err.message}`);
-      await this.prisma.interviewSession.update({
-        where: { id: interviewId },
-        data: { spkStatus: 'failed', spkError: err.message },
-      });
-      throw err;
+    } finally {
+      this.inFlightRebuilds.delete(interviewId);
     }
   }
 
@@ -200,7 +185,7 @@ export class SpkService {
   async rebuildSpkProfile(interviewId: string): Promise<void> {
     const session = await this.prisma.interviewSession.findUnique({
       where: { id: interviewId },
-      select: { id: true, status: true },
+      select: { id: true, status: true, spkStatus: true },
     });
 
     if (!session) {
@@ -211,6 +196,13 @@ export class SpkService {
       throw new BadRequestException(
         `Cannot rebuild SPK for an interview that is not COMPLETED (status: ${session.status}).`,
       );
+    }
+
+    if (session.spkStatus === 'building') {
+      this.logger.warn(
+        `[SPK] Rebuild already running for ${interviewId}. Skipping duplicate.`,
+      );
+      return;
     }
 
     await this.buildSpkProfile(interviewId);
