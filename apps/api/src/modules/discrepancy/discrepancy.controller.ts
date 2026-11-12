@@ -1,9 +1,6 @@
-import { Controller, Patch, Param, Body, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Controller, Patch, Param, Body } from '@nestjs/common';
 import { DiscrepancyService } from './discrepancy.service';
-import {
-  DiscrepancyStatusUpdate,
-  DiscrepancyStatusUpdateSchema,
-} from '@echogrow/shared';
+import { DiscrepancyStatusUpdate } from '@echogrow/shared';
 
 @Controller('discrepancies')
 export class DiscrepancyController {

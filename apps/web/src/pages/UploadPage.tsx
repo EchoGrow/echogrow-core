@@ -170,7 +170,7 @@ export function UploadPage() {
 
       setCv(text.slice(0, MAX_LENGTH))
       toast.success('Resume extracted', { description: `${file.name} → ${text.length.toLocaleString()} characters` })
-    } catch (error) {
+    } catch {
       toast.dismiss('cv-extract')
       toast.error('Could not read file', { description: 'Try a different file or paste the resume text.' })
     }
