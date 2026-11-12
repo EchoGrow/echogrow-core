@@ -17,6 +17,7 @@ export const SpkDiscrepancySchema = z.object({
   interview_says: z.string(),
   status: z.enum(['pending', 'confirmed', 'dismissed']),
   confidence: z.number().min(0).max(1),
+  reviewer_notes: z.string().nullable().optional(),
 });
 
 // SPK Skill Gap

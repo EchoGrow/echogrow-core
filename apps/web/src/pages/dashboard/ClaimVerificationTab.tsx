@@ -1,38 +1,54 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ShieldCheck, TrendingUp, Sparkles } from 'lucide-react';
-import { Card, Button } from '../../components/ui';
+import {
+  ShieldCheck,
+  TrendingUp,
+  Sparkles,
+  RotateCcw,
+  Loader2,
+  AlertTriangle,
+  Info,
+} from 'lucide-react';
+import { Card, Button, toast } from '../../components/ui';
 import { ReviewBanner } from '../../components/ui/ReviewBanner';
 import { DiscrepancyDetail } from '../../components/discrepancies/DiscrepancyDetail';
-import { getDiscrepancies, updateDiscrepancyStatus } from '../../lib/api';
+import { DashboardErrorState } from '../../components/dashboard/DashboardErrorState';
+import {
+  getDiscrepancies,
+  updateDiscrepancyStatus,
+  rebuildSpkProfile,
+} from '../../lib/api';
 import type { DiscrepancyRecord, DiscrepancyStatus } from '../../lib/api';
 import { useScorecard } from '../../lib/scorecard/useScorecard';
 import { fadeUp, staggerContainer } from '../../lib/animations';
+import { cn } from '../../lib/cn';
 
-// ============================================================
-// Loading skeleton — matches the discrepancy card shape
-// ============================================================
+const SEVERITY_ORDER: Record<string, number> = {
+  high: 0,
+  medium: 1,
+  low: 2,
+};
+
 function ClaimVerificationSkeleton() {
   return (
     <div className="space-y-6" aria-busy="true" aria-live="polite">
       <span className="sr-only">Loading discrepancies…</span>
 
-      {/* Header skeleton */}
       <div>
         <div className="h-3 w-32 rounded skeleton" />
         <div className="mt-2 h-8 w-48 rounded-lg skeleton" />
         <div className="mt-3 h-4 w-full max-w-lg rounded skeleton" />
       </div>
 
-      {/* Discrepancy cards skeleton */}
       <div className="space-y-4">
         {[0, 1].map((i) => (
-          <div key={i} className="rounded-card border border-line bg-surface-card p-5 sm:p-6">
-            {/* Left accent bar */}
+          <div
+            key={i}
+            className="rounded-card border border-line bg-surface-card p-5 sm:p-6"
+          >
             <div className="absolute inset-y-0 left-0 w-1.5 rounded-l-card bg-line-strong" />
 
-            {/* Header: field name + badges */}
             <div className="flex flex-wrap items-start justify-between gap-3 pl-3">
               <div className="min-w-0">
                 <div className="h-3 w-20 rounded skeleton" />
@@ -44,7 +60,6 @@ function ClaimVerificationSkeleton() {
               </div>
             </div>
 
-            {/* Two quote blocks */}
             <div className="mt-4 grid gap-4 pl-3 sm:grid-cols-2">
               <div className="rounded-xl border border-line bg-surface px-4 py-3">
                 <div className="flex items-center gap-2">
@@ -64,7 +79,6 @@ function ClaimVerificationSkeleton() {
               </div>
             </div>
 
-            {/* Action buttons */}
             <div className="mt-4 flex flex-wrap gap-2 pl-3">
               <div className="h-9 w-28 rounded-xl skeleton" />
               <div className="h-9 w-28 rounded-xl skeleton" />
@@ -76,9 +90,6 @@ function ClaimVerificationSkeleton() {
   );
 }
 
-// ============================================================
-// Empty state — same pattern as GrowthPlanTab
-// ============================================================
 function EmptyState({ interviewId }: { interviewId: string }) {
   return (
     <motion.div variants={fadeUp} className="mx-auto max-w-2xl">
@@ -96,8 +107,8 @@ function EmptyState({ interviewId }: { interviewId: string }) {
           No discrepancies detected
         </h2>
         <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-fg-muted">
-          Every claim in the interview matches the resume. No human review is needed for this
-          interview.
+          Every claim in the interview matches the resume. No human review is
+          needed for this interview.
         </p>
 
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
@@ -119,14 +130,132 @@ function EmptyState({ interviewId }: { interviewId: string }) {
   );
 }
 
+function SpkToolbar({
+  pendingCount,
+  spkStatus,
+  onRebuild,
+  isRebuilding,
+}: {
+  pendingCount: number;
+  spkStatus: 'pending' | 'building' | 'ready' | 'failed';
+  onRebuild: () => void;
+  isRebuilding: boolean;
+}) {
+  const isFailed = spkStatus === 'failed';
+  const isBuilding = spkStatus === 'building';
+  const allReviewed = pendingCount === 0;
+  const busy = isRebuilding || isBuilding;
+
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-line bg-surface-card/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-warning-50 px-3 py-1 text-xs font-semibold text-warning-700 dark:bg-warning-500/10 dark:text-warning-500">
+          <span className="h-1.5 w-1.5 rounded-full bg-warning-500" />
+          {pendingCount} pending
+        </span>
+
+        {allReviewed && spkStatus === 'ready' && (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-success-50 px-3 py-1 text-xs font-semibold text-success-700 dark:bg-success-500/10 dark:text-success-500">
+            <ShieldCheck className="h-3 w-3" />
+            All reviewed — SPK is up to date
+          </span>
+        )}
+
+        {isBuilding && (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-50 px-3 py-1 text-xs font-semibold text-accent-700 dark:bg-accent-500/10 dark:text-accent-300">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            Rebuilding SPK…
+          </span>
+        )}
+
+        {allReviewed && isFailed && (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-danger-50 px-3 py-1 text-xs font-semibold text-danger-700 dark:bg-danger-500/10 dark:text-danger-500">
+            <AlertTriangle className="h-3 w-3" />
+            SPK rebuild failed
+          </span>
+        )}
+      </div>
+
+      <div className="flex flex-col items-start gap-1.5 sm:items-end">
+        <Button
+          size="sm"
+          variant={isFailed ? 'primary' : 'secondary'}
+          onClick={onRebuild}
+          disabled={busy}
+          className="whitespace-nowrap"
+        >
+          {busy ? (
+            <>
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              Rebuilding…
+            </>
+          ) : (
+            <>
+              <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+              Rebuild SPK now
+            </>
+          )}
+        </Button>
+
+        <span
+          className={cn(
+            'inline-flex items-start gap-1 text-[11px] leading-relaxed',
+            isFailed
+              ? 'text-danger-700 dark:text-danger-500'
+              : 'text-fg-muted',
+          )}
+        >
+          {isFailed ? (
+            <>
+              <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+              The last SPK rebuild failed. Click to retry.
+            </>
+          ) : isBuilding ? (
+            <>
+              <Loader2 className="mt-0.5 h-3 w-3 shrink-0 animate-spin" />
+              Rebuilding the SPK profile. This may take up to 90 seconds.
+            </>
+          ) : (
+            <>
+              <Info className="mt-0.5 h-3 w-3 shrink-0" />
+              {pendingCount} claim{pendingCount === 1 ? '' : 's'} still pending.
+              The SPK rebuilds automatically once all are reviewed. Use this
+              button to rebuild early.
+            </>
+          )}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export function ClaimVerificationTab() {
   const { interviewId = '' } = useParams<{ interviewId: string }>();
-  const { status: scorecardStatus } = useScorecard();
+  const {
+    status: scorecardStatus,
+    scorecard,
+    refresh: refreshScorecard,
+    retryAll,
+    setSpkStatus,
+  } = useScorecard();
 
   const [discrepancies, setDiscrepancies] = useState<DiscrepancyRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [isRebuilding, setIsRebuilding] = useState(false);
+
+  const pendingCount = discrepancies.filter(
+    (d) => d.status.toLowerCase() === 'pending',
+  ).length;
+
+  const spkStatus =
+    scorecard?.status === 'scored'
+      ? scorecard.spkStatus ?? 'pending'
+      : 'pending';
+
+  const showToolbar =
+    pendingCount > 0 || spkStatus === 'failed' || spkStatus === 'building';
 
   useEffect(() => {
     let cancelled = false;
@@ -137,11 +266,20 @@ export function ClaimVerificationTab() {
       try {
         const response = await getDiscrepancies(interviewId);
         if (!cancelled) {
-          setDiscrepancies(response.discrepancies);
+          const sorted = [...response.discrepancies].sort((a, b) => {
+            const aOrder = SEVERITY_ORDER[a.severity] ?? 1;
+            const bOrder = SEVERITY_ORDER[b.severity] ?? 1;
+            return aOrder - bOrder;
+          });
+          setDiscrepancies(sorted);
         }
       } catch (cause) {
         if (!cancelled) {
-          setError(cause instanceof Error ? cause.message : 'Failed to load discrepancies.');
+          setError(
+            cause instanceof Error
+              ? cause.message
+              : 'Failed to load discrepancies.',
+          );
         }
       } finally {
         if (!cancelled) {
@@ -162,16 +300,60 @@ export function ClaimVerificationTab() {
     };
   }, [interviewId]);
 
-  async function handleStatusChange(id: string, status: DiscrepancyStatus) {
+  async function handleStatusChange(
+    id: string,
+    status: DiscrepancyStatus,
+    reviewerNotes?: string,
+  ) {
     setActionError(null);
     try {
-      await updateDiscrepancyStatus(id, status as Exclude<DiscrepancyStatus, 'pending'>);
-      
-      setDiscrepancies((current) =>
-        current.map((item) => (item.id === id ? { ...item, status } : item)),
+      await updateDiscrepancyStatus(
+        id,
+        status as Exclude<DiscrepancyStatus, 'pending'>,
+        reviewerNotes,
       );
+
+      setDiscrepancies((current) =>
+        current.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                status,
+                reviewerNotes: reviewerNotes ?? item.reviewerNotes ?? null,
+              }
+            : item,
+        ),
+      );
+
+      const remaining = discrepancies.filter(
+        (d) => d.id !== id && d.status.toLowerCase() === 'pending',
+      ).length;
+
+      if (remaining === 0) {
+        setTimeout(() => refreshScorecard(), 500);
+      }
     } catch (cause) {
-      setActionError(cause instanceof Error ? cause.message : 'Failed to update status.');
+      setActionError(
+        cause instanceof Error ? cause.message : 'Failed to update status.',
+      );
+    }
+  }
+
+  async function handleManualRebuild() {
+    setIsRebuilding(true);
+    try {
+      // Optimistic: mark as building immediately.
+      setSpkStatus('building', null);
+      await rebuildSpkProfile(interviewId);
+      setTimeout(() => refreshScorecard(), 1000);
+    } catch (cause) {
+      toast.error('Failed to start SPK rebuild', {
+        description:
+          cause instanceof Error ? cause.message : 'Unknown error',
+      });
+      refreshScorecard();
+    } finally {
+      setIsRebuilding(false);
     }
   }
 
@@ -179,30 +361,24 @@ export function ClaimVerificationTab() {
     return <ReviewBanner />;
   }
 
-  // Loading — use skeleton, not spinner
   if (loading) {
     return <ClaimVerificationSkeleton />;
   }
 
   if (error) {
     return (
-      <Card className="mx-auto max-w-xl p-8 text-center animate-fade-up">
-        <h2 className="text-lg font-semibold text-fg-strong">Unable to load discrepancies</h2>
-        <p className="mt-2 text-sm text-fg-muted">{error}</p>
-        <Link
-          to={`/dashboard/${interviewId}/overview`}
-          className="mt-6 inline-block text-sm font-semibold text-accent-700 hover:underline dark:text-accent-300"
-        >
-          ← Back to overview
-        </Link>
-      </Card>
+      <DashboardErrorState
+        title="Could not load discrepancies"
+        message={error}
+        onRetry={retryAll}
+        backHref={`/dashboard/${interviewId}/overview`}
+      />
     );
   }
 
-  // Empty state — no discrepancies
   if (discrepancies.length === 0) {
     return (
-      <motion.section 
+      <motion.section
         variants={staggerContainer}
         initial="hidden"
         animate="visible"
@@ -212,7 +388,9 @@ export function ClaimVerificationTab() {
           <p className="text-xs font-semibold tracking-[0.18em] text-accent-700 uppercase dark:text-accent-300">
             Claim verification
           </p>
-          <h2 className="mt-1 text-2xl font-semibold text-fg-strong sm:text-3xl">Verification</h2>
+          <h2 className="mt-1 text-2xl font-semibold text-fg-strong sm:text-3xl">
+            Verification
+          </h2>
           <p className="mt-2 text-sm text-fg-muted">
             Review claims that differ between the candidate's CV and interview.
           </p>
@@ -224,7 +402,7 @@ export function ClaimVerificationTab() {
   }
 
   return (
-    <motion.section 
+    <motion.section
       variants={staggerContainer}
       initial="hidden"
       animate="visible"
@@ -234,15 +412,31 @@ export function ClaimVerificationTab() {
         <p className="text-xs font-semibold tracking-[0.18em] text-accent-700 uppercase dark:text-accent-300">
           Claim verification
         </p>
-        <h2 className="mt-1 text-2xl font-semibold text-fg-strong sm:text-3xl">Verification</h2>
+        <h2 className="mt-1 text-2xl font-semibold text-fg-strong sm:text-3xl">
+          Verification
+        </h2>
         <p className="mt-2 text-sm text-fg-muted">
-          Review claims that differ between the candidate's CV and interview. Confirm or dismiss each discrepancy.
+          Review claims that differ between the candidate's CV and interview.
+          Confirm or dismiss each discrepancy. Sorted by severity (high first).
         </p>
       </motion.div>
 
+      {showToolbar && (
+        <motion.div variants={fadeUp}>
+          <SpkToolbar
+            pendingCount={pendingCount}
+            spkStatus={spkStatus}
+            onRebuild={handleManualRebuild}
+            isRebuilding={isRebuilding}
+          />
+        </motion.div>
+      )}
+
       {actionError && (
         <Card className="border-danger-500/30 bg-danger-50 p-4 animate-scale-in dark:bg-danger-500/10">
-          <p className="text-sm text-danger-700 dark:text-danger-500">{actionError}</p>
+          <p className="text-sm text-danger-700 dark:text-danger-500">
+            {actionError}
+          </p>
         </Card>
       )}
 

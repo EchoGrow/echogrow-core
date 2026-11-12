@@ -1,8 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import { toast } from 'sonner'
 import { ApiError, getScorecard } from '../api'
+import type { SpkStatus } from '../api'
 import { INITIAL_SCORECARD_STATE, ScorecardContext } from './context'
 import type { ScorecardState } from './context'
+
+const SPK_BUILD_WATCHDOG_MS = 90_000
 
 export function ScorecardProvider({
   interviewId,
@@ -13,6 +17,59 @@ export function ScorecardProvider({
 }) {
   const [state, setState] = useState<ScorecardState>(INITIAL_SCORECARD_STATE)
   const [attempt, setAttempt] = useState(0)
+
+  const rebuildToastIdRef = useRef<string | number | null>(null)
+  const previousSpkStatusRef = useRef<SpkStatus | null>(null)
+  const watchdogTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const setSpkStatus = useCallback(
+    (status: SpkStatus, error: string | null = null) => {
+      setState((prev) => {
+        if (!prev.scorecard || prev.scorecard.status !== 'scored') {
+          return prev
+        }
+        return {
+          ...prev,
+          scorecard: {
+            ...prev.scorecard,
+            spkStatus: status,
+            spkError: error,
+          },
+        }
+      })
+    },
+    [],
+  )
+
+  const clearWatchdog = useCallback(() => {
+    if (watchdogTimerRef.current !== null) {
+      clearTimeout(watchdogTimerRef.current)
+      watchdogTimerRef.current = null
+    }
+  }, [])
+
+  const armWatchdog = useCallback(() => {
+    clearWatchdog()
+    watchdogTimerRef.current = setTimeout(() => {
+      setState((prev) => {
+        if (!prev.scorecard || prev.scorecard.status !== 'scored') {
+          return prev
+        }
+        if (prev.scorecard.spkStatus !== 'building') {
+          return prev
+        }
+        return {
+          ...prev,
+          scorecard: {
+            ...prev.scorecard,
+            spkStatus: 'failed',
+            spkError:
+              'The SPK rebuild did not respond within 90 seconds. This usually means the LLM call failed or timed out.',
+          },
+        }
+      })
+    }, SPK_BUILD_WATCHDOG_MS)
+  }, [clearWatchdog])
 
   useEffect(() => {
     if (!interviewId) return
@@ -26,7 +83,6 @@ export function ScorecardProvider({
           if (cancelled) return
 
           if (response.status === 'processing') {
-            // Pipeline still running → poll again in 2 seconds.
             setState({ status: 'processing', scorecard: response, error: null })
             timer = setTimeout(() => setAttempt((v) => v + 1), 2000)
           } else if (response.status === 'needs_review') {
@@ -40,18 +96,6 @@ export function ScorecardProvider({
           } else if (response.status === 'failed') {
             setState({ status: 'failed', scorecard: response, error: response.message })
           } else {
-            // status === 'scored' — the scorecard exists, but the pipeline may
-            // still be finishing verification and planning. The backend moves
-            // through SCORED → SCORED → SCORED → COMPLETED as each step finishes,
-            // and returns `progress.{isScored,isVerified,isPlanned}` so we can
-            // tell exactly which step is done.
-            //
-            // Keep polling while:
-            //   (a) the pipeline is still running (any of the three flags is false), OR
-            //   (b) SPK is still being built (status 'pending' or 'building').
-            //
-            // Without this, the UI would freeze after Step 1 (isScored=true) and
-            // show an incomplete report until a manual page reload.
             setState({ status: 'ready', scorecard: response, error: null })
 
             const progress = response.progress
@@ -69,15 +113,12 @@ export function ScorecardProvider({
         })
         .catch((cause: unknown) => {
           if (cancelled) return
-
           const message =
             cause instanceof ApiError
               ? cause.message
               : 'Something went wrong while loading the scorecard. Please try again.'
 
           if (cause instanceof ApiError && cause.status === 400) {
-            // 400 usually means the pipeline hasn't produced a scorecard yet.
-            // Treat it like 'processing' and keep polling.
             setState({ status: 'processing', scorecard: null, error: message })
             timer = setTimeout(() => setAttempt((v) => v + 1), 3000)
           } else if (cause instanceof ApiError && cause.status === 404) {
@@ -96,10 +137,84 @@ export function ScorecardProvider({
     }
   }, [interviewId, attempt])
 
+  const currentSpkStatus: SpkStatus | null =
+    state.scorecard && state.scorecard.status === 'scored'
+      ? state.scorecard.spkStatus ?? 'pending'
+      : null
+
+  useEffect(() => {
+    if (currentSpkStatus === null) return
+
+    const previous = previousSpkStatusRef.current
+    const current = currentSpkStatus
+
+    if (current === 'building' && previous !== 'building') {
+      if (rebuildToastIdRef.current !== null) {
+        toast.dismiss(rebuildToastIdRef.current)
+      }
+      rebuildToastIdRef.current = toast.loading('Rebuilding SPK profile…', {
+        description:
+          'Extracting metadata and verified skills. This may take up to 90 seconds.',
+      })
+      armWatchdog()
+    }
+
+    if (previous === 'building' && current === 'ready') {
+      clearWatchdog()
+      if (rebuildToastIdRef.current !== null) {
+        toast.dismiss(rebuildToastIdRef.current)
+        rebuildToastIdRef.current = null
+      }
+      toast.success('SPK updated', {
+        description: 'Agent David now sees the latest human review decisions.',
+      })
+    }
+
+    if (previous === 'building' && current === 'failed') {
+      clearWatchdog()
+      if (rebuildToastIdRef.current !== null) {
+        toast.dismiss(rebuildToastIdRef.current)
+        rebuildToastIdRef.current = null
+      }
+      toast.error('SPK rebuild failed', {
+        description:
+          state.scorecard?.status === 'scored'
+            ? state.scorecard.spkError ?? 'The profile could not be rebuilt. Try again.'
+            : 'The profile could not be rebuilt. Try again.',
+      })
+    }
+
+    previousSpkStatusRef.current = current
+  }, [currentSpkStatus, state.scorecard, armWatchdog, clearWatchdog])
+
+  useEffect(() => {
+    return () => {
+      if (rebuildToastIdRef.current !== null) {
+        toast.dismiss(rebuildToastIdRef.current)
+      }
+      clearWatchdog()
+    }
+  }, [clearWatchdog])
+
   const refresh = useCallback(() => {
     setState(INITIAL_SCORECARD_STATE)
     setAttempt((value) => value + 1)
   }, [])
+
+  /**
+   * Full dashboard reload. Resets state, clears the watchdog, and re-fetches
+   * the scorecard. This causes DashboardLayout + all tabs to re-mount with
+   * fresh data.
+   */
+  const retryAll = useCallback(() => {
+    if (rebuildToastIdRef.current !== null) {
+      toast.dismiss(rebuildToastIdRef.current)
+      rebuildToastIdRef.current = null
+    }
+    clearWatchdog()
+    setState(INITIAL_SCORECARD_STATE)
+    setAttempt((value) => value + 1)
+  }, [clearWatchdog])
 
   const value = useMemo(
     () => ({
@@ -107,8 +222,10 @@ export function ScorecardProvider({
         ? state
         : { status: 'not-found' as const, scorecard: null, error: null }),
       refresh,
+      retryAll,
+      setSpkStatus,
     }),
-    [interviewId, state, refresh],
+    [interviewId, state, refresh, retryAll, setSpkStatus],
   )
 
   return <ScorecardContext.Provider value={value}>{children}</ScorecardContext.Provider>
