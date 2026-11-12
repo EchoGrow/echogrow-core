@@ -1,5 +1,5 @@
 import { createContext } from 'react'
-import type { ScorecardResponse } from '../api'
+import type { ScorecardResponse, SpkStatus } from '../api'
 
 export type ScorecardStatus = 
   | 'loading' 
@@ -19,6 +19,13 @@ export interface ScorecardState {
 
 export interface ScorecardContextValue extends ScorecardState {
   refresh: () => void
+  /** Reloads the entire dashboard (scorecard + all tabs + layout). */
+  retryAll: () => void
+  /**
+   * Optimistic update: set spkStatus immediately so the UI reacts before
+   * the next poll. Used by rebuild buttons in any tab.
+   */
+  setSpkStatus: (status: SpkStatus, error?: string | null) => void
 }
 
 export const INITIAL_SCORECARD_STATE: ScorecardState = {

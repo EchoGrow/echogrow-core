@@ -105,9 +105,10 @@ export interface DiscrepancyRecord {
   cvQuote: string
   interviewQuote: string
   confidence: number
-  severity: DiscrepancySeverity  // ← required (no `?`)
+  severity: DiscrepancySeverity 
   action: 'flag_for_human_review'
   status: DiscrepancyStatus
+  reviewerNotes: string | null 
 }
 
 export interface DiscrepancyResponse {
@@ -350,6 +351,7 @@ export async function getDiscrepancies(interviewId: string): Promise<Discrepancy
 export async function updateDiscrepancyStatus(
   id: string,
   status: Exclude<DiscrepancyStatus, 'pending'>,
+  reviewerNotes?: string,
 ): Promise<void> {
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
@@ -363,7 +365,10 @@ export async function updateDiscrepancyStatus(
           'Content-Type': 'application/json',
           Accept: 'application/json',
         },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({
+          status,
+          ...(reviewerNotes?.trim() ? { reviewerNotes: reviewerNotes.trim() } : {}),
+        }),
         signal: controller.signal,
       },
     )
@@ -526,26 +531,34 @@ export async function getSpkExport(interviewId: string): Promise<SpkExport> {
   }
 }
 
-export async function rebuildSpkProfile(interviewId: string): Promise<{ interviewId: string; status: string }> {
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+export async function rebuildSpkProfile(
+  interviewId: string,
+): Promise<{ interviewId: string; status: string }> {
+  const controller = new AbortController()
+  // 10s is enough to confirm the request reached the server.
+  // The actual rebuild runs in the background and is tracked by polling.
+  const timeout = window.setTimeout(() => controller.abort(), 10_000)
 
   try {
     const response = await fetch(
       `${API_BASE_URL}/interviews/${encodeURIComponent(interviewId)}/spk-rebuild`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: controller.signal },
-    );
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+      },
+    )
 
-    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status);
+    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
 
-    return (await response.json()) as { interviewId: string; status: string };
+    return (await response.json()) as { interviewId: string; status: string }
   } catch (cause) {
-    if (cause instanceof ApiError) throw cause;
+    if (cause instanceof ApiError) throw cause
     if (cause instanceof DOMException && cause.name === 'AbortError') {
-      throw new ApiError('The request timed out. Check your connection and try again.');
+      throw new ApiError('The request timed out. Check your connection and try again.')
     }
-    throw new ApiError('Could not reach the server. Check your connection and try again.');
+    throw new ApiError('Could not reach the server. Check your connection and try again.')
   } finally {
-    window.clearTimeout(timeout);
+    window.clearTimeout(timeout)
   }
 }
