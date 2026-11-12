@@ -55,6 +55,7 @@ export interface ProcessingResponse {
     isVerified: boolean
     isPlanned: boolean
   }
+  isQueued?: boolean
 }
 
 export interface TimeSavedBreakdown {
@@ -197,6 +198,45 @@ export interface SpkExport {
   schema_version: string;
 }
 
+// ============================================================
+// Bulk Upload Types
+// ============================================================
+
+/** One candidate in the `metadata` part of a bulk upload. Files are matched by name. */
+export interface BulkUploadCandidate {
+  candidateName: string
+  candidateEmail: string
+  transcriptFileName: string
+  resumeFileName: string
+}
+
+export interface BulkUploadResultRecord {
+  candidateName: string
+  candidateEmail: string
+  status: 'queued' | 'error'
+  interviewId?: string
+  error?: string
+}
+
+export interface RejectedFileRecord {
+  filename: string
+  reason: string
+  sizeBytes: number
+}
+
+export interface BulkUploadSummary {
+  total: number
+  queued: number
+  failed: number
+  rejectedFilesCount: number
+}
+
+export interface BulkUploadResponse {
+  results: BulkUploadResultRecord[]
+  rejectedFiles: RejectedFileRecord[]
+  summary: BulkUploadSummary
+}
+
 export class ApiError extends Error {
   readonly status: number
 
@@ -279,6 +319,66 @@ export async function createInterview(input: CreateInterviewRequest): Promise<Cr
 
     if (cause instanceof DOMException && cause.name === 'AbortError') {
       throw new ApiError('The request timed out. Check your connection and try again.')
+    }
+
+    throw new ApiError('Could not reach the server. Check your connection and try again.')
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
+const BULK_UPLOAD_TIMEOUT_MS = 120_000
+
+/**
+ * Sends every file plus the candidate metadata in one multipart request.
+ *
+ * The API matches files to candidates by `File.name`, so names are sent as-is
+ * (the caller is responsible for keeping them unique).
+ */
+export async function bulkUploadInterviews(
+  files: File[],
+  metadata: BulkUploadCandidate[],
+): Promise<BulkUploadResponse> {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), BULK_UPLOAD_TIMEOUT_MS)
+
+  try {
+    const form = new FormData()
+    for (const file of files) form.append('files', file, file.name)
+    form.append('metadata', JSON.stringify(metadata))
+
+    const response = await fetch(`${API_BASE_URL}/interviews/bulk-upload`, {
+      method: 'POST',
+      headers: { Accept: 'application/json' },
+      body: form,
+      signal: controller.signal,
+    })
+
+    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+
+    const data = (await response.json()) as Partial<BulkUploadResponse>
+
+    if (!Array.isArray(data.results)) {
+      throw new ApiError('The server response did not include a results array.', response.status)
+    }
+
+    const rejectedFiles = data.rejectedFiles ?? []
+
+    return {
+      results: data.results,
+      rejectedFiles,
+      summary: data.summary ?? {
+        total: data.results.length,
+        queued: data.results.filter((r) => r.status === 'queued').length,
+        failed: data.results.filter((r) => r.status === 'error').length,
+        rejectedFilesCount: rejectedFiles.length,
+      },
+    }
+  } catch (cause) {
+    if (cause instanceof ApiError) throw cause
+
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw new ApiError('The upload timed out. Try fewer files or a faster connection.')
     }
 
     throw new ApiError('Could not reach the server. Check your connection and try again.')

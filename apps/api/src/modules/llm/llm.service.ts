@@ -49,15 +49,39 @@ export class LlmService {
         lastError = error;
         const message = error instanceof Error ? error.message : String(error);
         const causeCode = error?.cause?.code ?? error?.cause?.message ?? 'n/a';
+        
+        // ✅ كشف أخطاء 429 (Quota Exceeded) و 503 (Unavailable)
+        const isRateLimit =
+          message.includes('429') ||
+          message.includes('RESOURCE_EXHAUSTED') ||
+          message.includes('quota');
+        const isServiceUnavailable =
+          message.includes('503') ||
+          message.includes('UNAVAILABLE');
+
         this.logger.warn(
           `LLM call failed on attempt ${attempt + 1}: ${message} | cause: ${causeCode}`,
         );
 
         if (attempt < maxRetries) {
-          const baseDelay = 1000 * Math.pow(2, attempt);
-          const jitter = Math.random() * 500;
-          const delay = baseDelay + jitter;
-          this.logger.log(`Waiting ${Math.round(delay)}ms before retry...`);
+          let delay: number;
+          
+          if (isRateLimit) {
+            // ✅ انتظار طويل لحين تجديد الحصة (30-60 ثانية)
+            delay = 30_000 * (attempt + 1) + Math.random() * 2000;
+            this.logger.warn(`Rate limited (429). Waiting ${Math.round(delay)}ms before retry...`);
+          } else if (isServiceUnavailable) {
+            // ✅ انتظار متوسط لـ 503
+            delay = 15_000 * (attempt + 1) + Math.random() * 2000;
+            this.logger.warn(`Service unavailable (503). Waiting ${Math.round(delay)}ms before retry...`);
+          } else {
+            // ✅ exponential backoff عادي
+            const baseDelay = 1000 * Math.pow(2, attempt);
+            const jitter = Math.random() * 500;
+            delay = baseDelay + jitter;
+            this.logger.log(`Waiting ${Math.round(delay)}ms before retry...`);
+          }
+
           await new Promise((resolve) => setTimeout(resolve, delay));
         }
       }
