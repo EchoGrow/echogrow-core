@@ -7,15 +7,19 @@ import {
   CheckCircle2,
   Download,
   ExternalLink,
+  FileJson,
+  FileSpreadsheet,
   FileText,
   FileUser,
   Layers,
   RefreshCw,
   Sparkles,
   TrendingUp,
+  Upload,
   Users,
   X,
   XCircle,
+  FileWarning,
 } from 'lucide-react'
 import { Logo } from '../components/brand/Logo'
 import { SEO } from '../components/SEO'
@@ -40,13 +44,21 @@ import {
   toMetadata,
   toUploadableFile,
 } from '../lib/bulkUpload'
-import type { CandidateDraft, PickedFile, RowStatus } from '../lib/bulkUpload'
+import type { CandidateDraft, PickedFile, RowStatus, BuildResult } from '../lib/bulkUpload'
+import {
+  exportBulkResultsAsJSON,
+  exportBulkResultsAsCSV,
+  exportBulkResultsAsPDF,
+} from '../lib/export/exportBulkResults'
 import { cn } from '../lib/cn'
 import { fadeUp, staggerContainer } from '../lib/animations'
 
-/** Status polling cadence and the point where the page stops waiting. */
+/* ------------------------------------------------------------------ */
+/* Constants                                                           */
+/* ------------------------------------------------------------------ */
+
 const POLL_INTERVAL_MS = 3_000
-const MAX_POLL_MS = 3 * 60 * 1000
+const MAX_POLL_MS = 20 * 60 * 1000 // 20 minutes
 
 interface RowState {
   status: RowStatus
@@ -57,7 +69,8 @@ interface RowState {
 
 interface Summary {
   total: number
-  inProgress: number
+  queued: number
+  processing: number
   scored: number
   needsReview: number
   failed: number
@@ -70,7 +83,14 @@ function nextFileId(): string {
   return `file-${fileSeq}-${Date.now()}`
 }
 
-/** Maps a scorecard response onto the row state used by the table. */
+/**
+ * Maps a scorecard response onto the row state used by the table.
+ *
+ * The backend returns `status: 'processing'` as soon as the job is queued.
+ * We use `isQueued` (from the backend) to distinguish:
+ *   - queued      → job is waiting in the queue (no flags set yet)
+ *   - processing  → job is actively being processed
+ */
 function toRowState(response: ScorecardResponse): RowState {
   switch (response.status) {
     case 'scored': {
@@ -78,8 +98,12 @@ function toRowState(response: ScorecardResponse): RowState {
       const done = !progress || (progress.isScored && progress.isVerified && progress.isPlanned)
       return { status: done ? 'scored' : 'processing', progress }
     }
-    case 'processing':
-      return { status: 'processing', progress: response.progress }
+    case 'processing': {
+      return {
+        status: response.isQueued ? 'queued' : 'processing',
+        progress: response.progress,
+      }
+    }
     case 'needs_review':
       return { status: 'needs_review' }
     case 'rejected':
@@ -101,28 +125,41 @@ function progressColor(status: RowStatus): string {
       return 'bg-danger-500'
     case 'processing':
       return 'bg-accent-500'
+    case 'queued':
+      return 'bg-line-strong'
     default:
       return 'bg-line-strong'
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* Steps                                                               */
+/* ------------------------------------------------------------------ */
+
 const STEPS = [
   {
+    id: 1,
     icon: FileText,
-    title: '1. Pair the files',
-    desc: 'Give each pair the same prefix, e.g. ahmed-transcript.txt and ahmed-cv.pdf. EchoGrow groups them for you.',
+    title: 'Pair the files',
+    desc: 'Give each pair the same prefix, e.g. ahmed-transcript.txt and ahmed-cv.pdf.',
   },
   {
+    id: 2,
     icon: CheckCircle2,
-    title: '2. Review the rows',
-    desc: 'Names and emails are pre-filled from the file names. Correct anything that is wrong before submitting.',
+    title: 'Review the rows',
+    desc: 'Names and emails are pre-filled. Correct anything that is wrong before submitting.',
   },
   {
+    id: 3,
     icon: TrendingUp,
-    title: '3. Track progress',
-    desc: 'Queued candidates move to scored or needs-review, and every finished row links to its dashboard.',
+    title: 'Track progress',
+    desc: 'Queued candidates move to scored or needs-review, and every row links to its dashboard.',
   },
 ]
+
+/* ------------------------------------------------------------------ */
+/* Helper Components                                                   */
+/* ------------------------------------------------------------------ */
 
 const inputBase =
   'w-full rounded-lg border bg-surface-card px-3 py-2 text-sm text-fg transition-all focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-offset-2 focus:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-60'
@@ -176,17 +213,74 @@ function SummaryStat({ label, value, tone }: { label: string; value: number; ton
   )
 }
 
+/* ------------------------------------------------------------------ */
+/* Main Component                                                      */
+/* ------------------------------------------------------------------ */
+
 export function BulkUploadPage() {
   const [files, setFiles] = useState<PickedFile[]>([])
   const [rows, setRows] = useState<CandidateDraft[]>([])
+  const [orphans, setOrphans] = useState<PickedFile[]>([])
   const [localRejected, setLocalRejected] = useState<RejectedFileRecord[]>([])
   const [rowState, setRowState] = useState<Record<string, RowState>>({})
   const [response, setResponse] = useState<BulkUploadResponse | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [polling, setPolling] = useState(false)
+  const [isParsing, setIsParsing] = useState(false)
+  const [parseProgress, setParseProgress] = useState(0)
 
   const rowStateRef = useRef<Record<string, RowState>>({})
+
+  // Load saved results from localStorage only if not a fresh tab
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const isFresh = params.get('fresh') === '1'
+
+    if (isFresh) {
+      localStorage.removeItem('echogrow_bulk_results')
+      window.history.replaceState({}, '', '/bulk-upload')
+      return
+    }
+
+    const saved = localStorage.getItem('echogrow_bulk_results')
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved) as BulkUploadResponse
+        if (parsed && Array.isArray(parsed.results)) {
+          setResponse(parsed)
+          const rebuilt: CandidateDraft[] = parsed.results.map((r, i) => ({
+            key: `saved-${i}-${r.candidateEmail}`,
+            candidateName: r.candidateName,
+            candidateEmail: r.candidateEmail,
+            transcript: null,
+            resume: null,
+          }))
+          setRows(rebuilt)
+          const states: Record<string, RowState> = {}
+          parsed.results.forEach((r, i) => {
+            const key = `saved-${i}-${r.candidateEmail}`
+            states[key] = {
+              status: r.status === 'queued' ? 'scored' : r.status === 'error' ? 'error' : 'scored',
+              interviewId: r.interviewId ?? undefined,
+              error: r.error ?? undefined,
+            }
+          })
+          setRowState(states)
+          rowStateRef.current = states
+        }
+      } catch {
+        // ignore corrupted data
+      }
+    }
+  }, [])
+
+  // Save results to localStorage when they change
+  useEffect(() => {
+    if (response && response.results.length > 0) {
+      localStorage.setItem('echogrow_bulk_results', JSON.stringify(response))
+    }
+  }, [response])
 
   useEffect(() => {
     rowStateRef.current = rowState
@@ -213,7 +307,8 @@ export function BulkUploadPage() {
 
     return {
       total: rows.length,
-      inProgress: statuses.filter((status) => status === 'queued' || status === 'processing').length,
+      queued: statuses.filter((status) => status === 'queued').length,
+      processing: statuses.filter((status) => status === 'processing').length,
       scored: statuses.filter((status) => status === 'scored').length,
       needsReview: statuses.filter((status) => status === 'needs_review').length,
       failed: statuses.filter(
@@ -221,6 +316,19 @@ export function BulkUploadPage() {
       ).length,
     }
   }, [rows, rowState])
+
+  const isAllFinished = useMemo(() => {
+    const states = Object.values(rowState)
+    if (states.length === 0) return false
+    return states.every(
+      (s) =>
+        s.status === 'scored' ||
+        s.status === 'needs_review' ||
+        s.status === 'rejected' ||
+        s.status === 'failed' ||
+        s.status === 'error',
+    )
+  }, [rowState])
 
   const canSubmit =
     rows.length > 0 &&
@@ -247,7 +355,7 @@ export function BulkUploadPage() {
           next[key] = {
             ...state,
             status: 'failed',
-            error: 'Still processing after 3 minutes. Open the dashboard to check the result.',
+            error: 'Still processing after 20 minutes. Open the dashboard to check the result.',
           }
         }
       }
@@ -315,22 +423,69 @@ export function BulkUploadPage() {
   }, [polling])
 
   /* ------------------------------------------------------------------ */
-  /* File handling                                                       */
+  /* File Handling                                                       */
   /* ------------------------------------------------------------------ */
 
-  const handleFiles = (incoming: File[]) => {
-    if (busy) {
-      toast.info('This batch is locked', {
-        description: 'Start a new batch to add more candidates.',
+  const handleFiles = async (incoming: File[]) => {
+  if (busy) {
+    toast.info('This batch is locked', {
+      description: 'Start a new batch to add more candidates.',
+    })
+    return
+  }
+
+  const MAX_TOTAL_FILES = MAX_BULK_CANDIDATES * 2
+    const currentCount = files.length
+    const remainingSlots = MAX_TOTAL_FILES - currentCount
+
+    if (remainingSlots <= 0) {
+      toast.error('File limit reached', {
+        description: `You already have ${currentCount} files (max ${MAX_TOTAL_FILES}).`,
+      })
+      return
+    }
+ 
+    const validFiles = incoming.filter((file) => {
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+      const isTxt = file.type === 'text/plain' || file.name.toLowerCase().endsWith('.txt')
+      return isPdf || isTxt
+    })
+
+    const skippedFiles = incoming.filter((file) => {
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+      const isTxt = file.type === 'text/plain' || file.name.toLowerCase().endsWith('.txt')
+      return !isPdf && !isTxt
+    })
+
+    if (skippedFiles.length > 0) {
+      toast.error(`${skippedFiles.length} file(s) skipped`, {
+        description: `Only PDF and TXT files are supported. Skipped: ${skippedFiles.map((f) => f.name).join(', ')}`,
+      })
+    }
+
+    if (validFiles.length === 0) return
+
+    if (validFiles.length > remainingSlots) {
+      toast.error('Too many files', {
+        description: `You tried to add ${validFiles.length} files, but only ${remainingSlots} slots remain (max ${MAX_TOTAL_FILES}).`,
       })
       return
     }
 
+    setIsParsing(true)
+    setParseProgress(0)
+
+    const total = validFiles.length
+    for (let i = 0; i < total; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 30))
+      setParseProgress(Math.round(((i + 1) / total) * 100))
+    }
+ 
     const accepted: PickedFile[] = []
     const rejected: RejectedFileRecord[] = []
     const pool = [...files]
 
-    for (const file of incoming) {
+    for (const file of validFiles) {
       if (file.size === 0) {
         rejected.push({ filename: file.name, reason: 'File is empty (0 bytes).', sizeBytes: 0 })
         continue
@@ -357,24 +512,35 @@ export function BulkUploadPage() {
       toast.error('No files were added', {
         description: rejected[0]?.reason ?? 'Try different files.',
       })
+      setIsParsing(false)
       return
     }
 
     const nextFiles = [...files, ...accepted]
     setFiles(nextFiles)
-    setRows((prev) => mergeCandidates(prev, buildCandidates(nextFiles)))
+
+    const result: BuildResult = buildCandidates(nextFiles)
+    setRows((prev) => mergeCandidates(prev, result.candidates))
+    setOrphans(result.orphans)
 
     toast.success(`${accepted.length} file${accepted.length === 1 ? '' : 's'} added`, {
       description:
         rejected.length > 0
           ? `${rejected.length} file${rejected.length === 1 ? '' : 's'} skipped — see the banner.`
-          : 'Check the candidate names and emails below.',
+          : result.orphans.length > 0
+            ? `${result.orphans.length} file${result.orphans.length === 1 ? '' : 's'} have no pair — see the warning below.`
+            : 'Check the candidate names and emails below.',
     })
+
+    setIsParsing(false)
+    setParseProgress(0)
   }
 
   const rebuild = (nextFiles: PickedFile[]) => {
     setFiles(nextFiles)
-    setRows((prev) => mergeCandidates(prev, buildCandidates(nextFiles)))
+    const result: BuildResult = buildCandidates(nextFiles)
+    setRows((prev) => mergeCandidates(prev, result.candidates))
+    setOrphans(result.orphans)
   }
 
   const removeFile = (id: string) => {
@@ -397,6 +563,7 @@ export function BulkUploadPage() {
   const resetBatch = () => {
     setFiles([])
     setRows([])
+    setOrphans([])
     setLocalRejected([])
     setRowState({})
     rowStateRef.current = {}
@@ -404,6 +571,7 @@ export function BulkUploadPage() {
     setSubmitError(null)
     setPolling(false)
     setSubmitting(false)
+    localStorage.removeItem('echogrow_bulk_results')
   }
 
   const downloadTemplate = () => {
@@ -414,6 +582,114 @@ export function BulkUploadPage() {
     link.download = 'echogrow-bulk-metadata-template.json'
     link.click()
     URL.revokeObjectURL(url)
+  }
+
+  const handleImportMetadata = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string
+        const parsed = JSON.parse(content) as Array<{
+          candidateName: string
+          candidateEmail: string
+          transcriptFileName: string
+          resumeFileName: string
+        }>
+
+        if (!Array.isArray(parsed)) {
+          toast.error('Invalid template', {
+            description: 'The file must contain a JSON array of candidates.',
+          })
+          return
+        }
+
+        const metaByTranscript = new Map(
+          parsed.map((item) => [item.transcriptFileName.toLowerCase(), item]),
+        )
+
+        let matched = 0
+        setRows((prev) =>
+          prev.map((row) => {
+            if (!row.transcript) return row
+            const key = row.transcript.file.name.toLowerCase()
+            const meta = metaByTranscript.get(key)
+            if (meta) {
+              matched++
+              return {
+                ...row,
+                candidateName: meta.candidateName,
+                candidateEmail: meta.candidateEmail,
+              }
+            }
+            return row
+          }),
+        )
+
+        toast.success('Metadata imported', {
+          description: `Matched ${matched} of ${parsed.length} candidates.`,
+        })
+      } catch {
+        toast.error('Invalid JSON', {
+          description: 'The file could not be parsed. Make sure it is valid JSON.',
+        })
+      }
+    }
+    reader.readAsText(file)
+    event.target.value = ''
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Export Handlers                                                     */
+  /* ------------------------------------------------------------------ */
+
+  const getMergedResults = () => {
+    if (!response) return []
+    return response.results.map((result) => {
+      const row = rows.find((r) => r.candidateEmail.trim() === result.candidateEmail)
+      const state = row ? rowState[row.key] : undefined
+      return {
+        candidateName: result.candidateName,
+        candidateEmail: result.candidateEmail,
+        status: state?.status ?? result.status,
+        interviewId: result.interviewId,
+        error: state?.error ?? result.error,
+      }
+    })
+  }
+
+  const handleExportJSON = () => {
+    if (!response) return
+    const merged = getMergedResults()
+    exportBulkResultsAsJSON(merged as any, toMetadata(rows))
+  }
+
+  const handleExportCSV = () => {
+    if (!response) return
+    const merged = getMergedResults()
+    exportBulkResultsAsCSV(merged as any, toMetadata(rows))
+  }
+
+  const handleExportPDF = async () => {
+    if (!response) return
+    const merged = getMergedResults()
+    try {
+      await exportBulkResultsAsPDF(merged as any, toMetadata(rows), {
+        total: summary.total,
+        queued: summary.queued,
+        failed: summary.failed,
+        rejectedFilesCount: rejectedFiles.length,
+        scored: summary.scored,
+        needsReview: summary.needsReview,
+      })
+      toast.success('PDF exported successfully')
+    } catch (cause) {
+      toast.error('Failed to export PDF', {
+        description: cause instanceof Error ? cause.message : 'Unknown error',
+      })
+    }
   }
 
   /* ------------------------------------------------------------------ */
@@ -524,6 +800,10 @@ export function BulkUploadPage() {
     }
   }
 
+  /* ------------------------------------------------------------------ */
+  /* Render                                                              */
+  /* ------------------------------------------------------------------ */
+
   return (
     <>
       <SEO
@@ -533,6 +813,7 @@ export function BulkUploadPage() {
       />
 
       <div className="flex min-h-svh flex-col bg-surface">
+        {/* Header */}
         <header className="sticky top-0 z-20 border-b border-line bg-surface-glass backdrop-blur">
           <div className="container-custom flex h-16 items-center justify-between gap-4">
             <Logo size="sm" />
@@ -554,82 +835,182 @@ export function BulkUploadPage() {
           animate="visible"
           className="container-custom w-full flex-1 py-10 lg:py-14"
         >
+          {/* Hero Section */}
           <motion.div variants={fadeUp} className="text-center">
             <span className="inline-flex items-center gap-2 rounded-full border border-line bg-chip px-3 py-1 text-xs font-medium text-fg-muted">
               <span className="h-1.5 w-1.5 rounded-full bg-accent-500 animate-pulse-glow" />
-              Bulk pipeline
+              Bulk Pipeline
             </span>
             <h1 className="mt-5 text-3xl font-semibold tracking-tight text-fg-strong sm:text-4xl lg:text-5xl">
               Score a whole shortlist{' '}
               <span className="text-accent-600 dark:text-accent-400">in one pass</span>.
             </h1>
             <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-fg-muted sm:text-base">
-              Drop transcripts and resumes for up to {MAX_BULK_CANDIDATES} candidates. EchoGrow pairs
-              the files, queues each interview, and tracks progress in one table.
+              Drop transcripts and resumes for up to {MAX_BULK_CANDIDATES} candidates. EchoGrow
+              pairs the files, queues each interview, and tracks progress in one table.
             </p>
           </motion.div>
 
-          <div className="mt-10 space-y-6">
-            <motion.div variants={fadeUp}>
-              <Card className="p-6 sm:p-8">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <h2 className="text-base font-semibold text-fg-strong">1. Add files</h2>
-                    <p className="mt-1 max-w-xl text-sm text-fg-muted">
-                      Name each pair with the same prefix, for example{' '}
-                      <code className="rounded bg-chip px-1.5 py-0.5 font-mono text-[11px] text-fg">
-                        ahmed-transcript.txt
-                      </code>{' '}
-                      and{' '}
-                      <code className="rounded bg-chip px-1.5 py-0.5 font-mono text-[11px] text-fg">
-                        ahmed-cv.pdf
-                      </code>
-                      .
-                    </p>
-                  </div>
-                  <Button variant="secondary" size="sm" onClick={downloadTemplate} disabled={busy}>
-                    <Download className="mr-2 h-4 w-4" />
-                    Download metadata template
-                  </Button>
+          {/* Steps Timeline */}
+          <motion.div variants={fadeUp} className="mt-12 grid gap-8 sm:grid-cols-3">
+            {STEPS.map((step, index) => (
+              <div key={step.id} className="relative flex flex-col items-center text-center">
+                {index < STEPS.length - 1 && (
+                  <div className="absolute top-7 left-[calc(50%+2.5rem)] hidden h-0.5 w-[calc(100%-5rem)] bg-gradient-to-r from-accent-500/30 to-transparent sm:block" />
+                )}
+
+                <div className="relative z-10 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-accent-500/15 to-accent-500/5 ring-1 ring-accent-500/20">
+                  <step.icon className="h-7 w-7 text-accent-600 dark:text-accent-400" />
+                  <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-accent-500 text-[10px] font-bold text-white shadow-sm">
+                    {step.id}
+                  </span>
                 </div>
 
-                <MultiDropzone
-                  id="bulk-files"
-                  disabled={busy}
-                  onFiles={handleFiles}
-                  hint={
-                    busy
-                      ? 'Start a new batch to upload more files'
-                      : 'Transcripts and resumes for every candidate, all at once'
-                  }
-                  className="mt-5"
-                />
+                <h3 className="mt-4 text-sm font-semibold text-fg-strong">{step.title}</h3>
+                <p className="mt-1.5 max-w-[220px] text-xs leading-relaxed text-fg-muted">
+                  {step.desc}
+                </p>
+              </div>
+            ))}
+          </motion.div>
 
-                <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-fg-muted">
-                  <span className="inline-flex items-center gap-1.5">
-                    <FileText className="h-3.5 w-3.5" />
-                    PDF or TXT
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <Users className="h-3.5 w-3.5" />
-                    Up to {MAX_BULK_CANDIDATES} candidates
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <FileUser className="h-3.5 w-3.5" />
-                    {formatBytes(MAX_BULK_FILE_BYTES)} per file
-                  </span>
-                  {files.length > 0 ? (
-                    <span className="font-medium text-fg">
-                      {files.length} file{files.length === 1 ? '' : 's'} selected
+          <div className="mt-12 space-y-6">
+            {/* Input Card */}
+            <motion.div variants={fadeUp}>
+              <Card className="overflow-hidden border-accent-500/20 shadow-lg">
+                <div className="border-b border-line bg-gradient-to-r from-accent-50/50 to-surface-card px-6 py-4 dark:from-accent-500/5">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h2 className="text-lg font-semibold text-fg-strong">Add files</h2>
+                      <p className="mt-0.5 text-sm text-fg-muted">
+                        Name each pair with the same prefix, e.g.{' '}
+                        <code className="rounded bg-chip px-1 py-0.5 font-mono text-[11px] text-fg whitespace-nowrap">
+                          ahmed-transcript.txt
+                        </code>{' '}
+                        and{' '}
+                        <code className="rounded bg-chip px-1 py-0.5 font-mono text-[11px] text-fg whitespace-nowrap">
+                          ahmed-cv.pdf
+                        </code>
+                        .
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button variant="secondary" size="sm" onClick={downloadTemplate} disabled={busy}>
+                        <Download className="mr-2 h-4 w-4" />
+                        Template
+                      </Button>
+                      <label
+                        className={cn(
+                          'inline-flex cursor-pointer items-center gap-2 rounded-xl border border-line-strong bg-surface-card px-3.5 py-2 text-sm font-semibold text-fg transition-all hover:border-accent-500 hover:bg-chip active:scale-[0.98]',
+                          busy && 'pointer-events-none opacity-50',
+                        )}
+                      >
+                        <Upload className="h-4 w-4" />
+                        Import metadata
+                        <input
+                          type="file"
+                          accept=".json,application/json"
+                          className="sr-only"
+                          onChange={handleImportMetadata}
+                          disabled={busy}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-xs text-fg-muted">
+                    Download the template, fill it in Excel, then import it to auto-fill names and emails.
+                  </p>
+                </div>
+
+                <div className="p-6">
+                  <MultiDropzone
+                    id="bulk-files"
+                    disabled={busy || isParsing}
+                    onFiles={handleFiles}
+                    hint={
+                      busy
+                        ? 'Start a new batch to upload more files'
+                        : 'Transcripts and resumes for every candidate, all at once'
+                    }
+                  />
+
+                  {isParsing && (
+                    <div className="mt-4">
+                      <div className="flex items-center justify-between text-xs text-fg-muted">
+                        <span>Processing files…</span>
+                        <span>{parseProgress}%</span>
+                      </div>
+                      <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-chip">
+                        <div
+                          className="h-full rounded-full bg-accent-500 transition-all duration-200"
+                          style={{ width: `${parseProgress}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-fg-muted">
+                    <span className="inline-flex items-center gap-1.5">
+                      <FileText className="h-3.5 w-3.5" />
+                      PDF or TXT
                     </span>
-                  ) : null}
+                    <span className="inline-flex items-center gap-1.5">
+                      <Users className="h-3.5 w-3.5" />
+                      Up to {MAX_BULK_CANDIDATES} candidates
+                    </span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <FileUser className="h-3.5 w-3.5" />
+                      {formatBytes(MAX_BULK_FILE_BYTES)} per file
+                    </span>
+                    {files.length > 0 && (
+                      <span className="font-medium text-fg">
+                        {files.length} file{files.length === 1 ? '' : 's'} selected
+                      </span>
+                    )}
+                  </div>
                 </div>
               </Card>
             </motion.div>
 
-            {rejectedFiles.length > 0 ? (
+            {/* Orphans Warning */}
+            {orphans.length > 0 && (
               <motion.div variants={fadeUp}>
                 <div className="rounded-xl border border-warning-500/30 bg-warning-50 px-4 py-3 text-sm text-warning-700 dark:bg-warning-500/10 dark:text-warning-500">
+                  <div className="flex items-start gap-3">
+                    <FileWarning className="mt-0.5 h-4 w-4 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold">
+                        {orphans.length} file{orphans.length === 1 ? '' : 's'} have no pair
+                      </p>
+                      <p className="mt-1 text-xs opacity-80">
+                        These files were added, but no matching transcript/resume was found. Add the missing pair or remove them.
+                      </p>
+                      <ul className="mt-2 space-y-1">
+                        {orphans.map((file) => (
+                          <li key={file.id} className="flex items-center gap-2 text-xs">
+                            <span className="font-medium">{file.file.name}</span>
+                            <span className="opacity-70">({file.kind})</span>
+                            <button
+                              type="button"
+                              onClick={() => removeFile(file.id)}
+                              className="ml-auto rounded p-0.5 text-warning-700/70 hover:bg-warning-100 hover:text-warning-900"
+                              aria-label={`Remove ${file.file.name}`}
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Rejected Files Banner */}
+            {rejectedFiles.length > 0 && (
+              <motion.div variants={fadeUp}>
+                <div className="rounded-xl border border-danger-500/30 bg-danger-50 px-4 py-3 text-sm text-danger-700 dark:bg-danger-500/10 dark:text-danger-500">
                   <div className="flex items-start gap-3">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                     <div className="min-w-0 flex-1">
@@ -652,50 +1033,39 @@ export function BulkUploadPage() {
                   </div>
                 </div>
               </motion.div>
-            ) : null}
+            )}
 
-            {rows.length === 0 ? (
-              <motion.div variants={fadeUp} className="grid gap-6 sm:grid-cols-3">
-                {STEPS.map((step) => (
-                  <div
-                    key={step.title}
-                    className="flex flex-col items-center rounded-card border border-line bg-surface-card p-6 text-center transition-all hover:border-line-strong hover:shadow-lift"
-                  >
-                    <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-accent-500/15 text-accent-600 dark:text-accent-400">
-                      <step.icon className="h-6 w-6" />
-                    </div>
-                    <h3 className="text-base font-semibold text-fg-strong">{step.title}</h3>
-                    <p className="mt-2 text-sm leading-relaxed text-fg-muted">{step.desc}</p>
-                  </div>
-                ))}
-              </motion.div>
-            ) : (
+            {/* Candidate Table */}
+            {rows.length > 0 && (
               <motion.div variants={fadeUp}>
-                <Card className="overflow-hidden">
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4">
+                <Card className="overflow-hidden shadow-md">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-chip/30 px-5 py-4">
                     <div className="flex items-center gap-2">
                       <Layers className="h-4 w-4 text-accent-600 dark:text-accent-400" />
-                      <h2 className="text-base font-semibold text-fg-strong">
-                        2. Review and submit
-                      </h2>
+                      <h2 className="text-base font-semibold text-fg-strong">Review and submit</h2>
                       <span className="rounded-full border border-line bg-chip px-2 py-0.5 text-xs tabular-nums text-fg-muted">
                         {rows.length} / {MAX_BULK_CANDIDATES}
                       </span>
                     </div>
-                    {polling ? (
+                    {polling && (
                       <span className="inline-flex items-center gap-2 text-xs font-medium text-accent-700 dark:text-accent-300">
                         <Spinner className="h-3.5 w-3.5" label="Polling statuses" />
                         Updating every 3s…
                       </span>
-                    ) : null}
+                    )}
                   </div>
 
-                  {response ? (
+                  {response && (
                     <div className="grid grid-cols-2 gap-3 border-b border-line bg-chip/40 px-5 py-4 sm:grid-cols-3 lg:grid-cols-6">
                       <SummaryStat label="Candidates" value={summary.total} />
                       <SummaryStat
-                        label="Queued / processing"
-                        value={summary.inProgress}
+                        label="Queued"
+                        value={summary.queued}
+                        tone="text-fg-strong"
+                      />
+                      <SummaryStat
+                        label="Processing"
+                        value={summary.processing}
                         tone="text-accent-700 dark:text-accent-300"
                       />
                       <SummaryStat
@@ -713,27 +1083,19 @@ export function BulkUploadPage() {
                         value={summary.failed}
                         tone="text-danger-700 dark:text-danger-500"
                       />
-                      <SummaryStat
-                        label="Rejected files"
-                        value={rejectedFiles.length}
-                        tone="text-warning-700 dark:text-warning-500"
-                      />
                     </div>
-                  ) : null}
+                  )}
 
-                  {submitError ? (
+                  {submitError && (
                     <div className="px-5 pt-4">
                       <Alert variant="error" title="Upload failed">
                         {submitError}
                       </Alert>
                     </div>
-                  ) : null}
+                  )}
 
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-[900px] border-collapse text-left">
-                      <caption className="sr-only">
-                        Candidate files, statuses, and progress for this bulk upload
-                      </caption>
                       <thead>
                         <tr className="border-b border-line bg-chip/30 text-[11px] uppercase tracking-wide text-fg-muted">
                           <th scope="col" className="px-4 py-3 font-medium">#</th>
@@ -751,8 +1113,7 @@ export function BulkUploadPage() {
                           const status: RowStatus = state?.status ?? 'ready'
                           const percent = progressForStatus(status, state?.progress)
                           const rowIssueList = issues[row.key] ?? []
-                          const nameInvalid =
-                            row.candidateName.trim().length < 2 && !busy
+                          const nameInvalid = row.candidateName.trim().length < 2 && !busy
                           const emailInvalid = !isValidEmail(row.candidateEmail) && !busy
 
                           return (
@@ -765,10 +1126,7 @@ export function BulkUploadPage() {
                                 <td className="px-3 py-3 align-top">
                                   <div className="min-w-[220px] space-y-2">
                                     <div>
-                                      <label
-                                        htmlFor={`name-${row.key}`}
-                                        className="sr-only"
-                                      >
+                                      <label htmlFor={`name-${row.key}`} className="sr-only">
                                         Candidate name for row {index + 1}
                                       </label>
                                       <input
@@ -789,10 +1147,7 @@ export function BulkUploadPage() {
                                       />
                                     </div>
                                     <div>
-                                      <label
-                                        htmlFor={`email-${row.key}`}
-                                        className="sr-only"
-                                      >
+                                      <label htmlFor={`email-${row.key}`} className="sr-only">
                                         Candidate email for row {index + 1}
                                       </label>
                                       <input
@@ -838,11 +1193,11 @@ export function BulkUploadPage() {
                                 <td className="px-3 py-3 align-top">
                                   <div className="flex flex-col items-start gap-1.5">
                                     <StatusPill status={status} />
-                                    {state?.error ? (
+                                    {state?.error && (
                                       <p className="max-w-[230px] text-xs leading-snug text-danger-500">
                                         {state.error}
                                       </p>
-                                    ) : null}
+                                    )}
                                   </div>
                                 </td>
 
@@ -865,16 +1220,18 @@ export function BulkUploadPage() {
 
                                 <td className="px-3 py-3 align-top text-right">
                                   <div className="flex flex-col items-end gap-2">
-                                    {state?.interviewId ? (
-                                      <Link
-                                        to={`/dashboard/${state.interviewId}/overview`}
+                                    {state?.interviewId && (
+                                      <a
+                                        href={`/dashboard/${state.interviewId}/overview`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
                                         className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-accent-700 transition-colors hover:bg-accent-50 dark:text-accent-300 dark:hover:bg-accent-500/10"
                                       >
                                         Dashboard
                                         <ExternalLink className="h-3.5 w-3.5" />
-                                      </Link>
-                                    ) : null}
-                                    {!busy ? (
+                                      </a>
+                                    )}
+                                    {!busy && (
                                       <button
                                         type="button"
                                         onClick={() => removeRow(row)}
@@ -883,23 +1240,29 @@ export function BulkUploadPage() {
                                       >
                                         <X className="h-4 w-4" />
                                       </button>
-                                    ) : null}
+                                    )}
                                   </div>
                                 </td>
                               </tr>
 
-                              {rowIssueList.length > 0 && !busy ? (
-                                <tr className="border-b border-line bg-danger-50/50 last:border-0 dark:bg-danger-500/5">
+                              {/* Enhanced Inline Issues Design */}
+                              {rowIssueList.length > 0 && !busy && (
+                                <tr className="border-b border-line last:border-0">
                                   <td />
-                                  <td colSpan={6} className="px-3 pb-3">
-                                    <ul className="space-y-0.5 text-xs leading-relaxed text-danger-500">
-                                      {rowIssueList.map((issue) => (
-                                        <li key={issue}>• {issue}</li>
-                                      ))}
-                                    </ul>
+                                  <td colSpan={6} className="px-3 pb-3 pt-0">
+                                    <div className="rounded-lg border border-danger-500/20 bg-danger-50/40 px-3 py-2 dark:bg-danger-500/5">
+                                      <ul className="space-y-1">
+                                        {rowIssueList.map((issue) => (
+                                          <li key={issue} className="flex items-start gap-1.5 text-xs leading-relaxed text-danger-600 dark:text-danger-400">
+                                            <XCircle className="mt-0.5 h-3 w-3 shrink-0" />
+                                            {issue}
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
                                   </td>
                                 </tr>
-                              ) : null}
+                              )}
                             </Fragment>
                           )
                         })}
@@ -918,7 +1281,7 @@ export function BulkUploadPage() {
                         `${issueCount} row${issueCount === 1 ? '' : 's'} need attention before upload.`
                       ) : response ? (
                         polling ? (
-                          'Analysis is running. This page keeps polling for up to 3 minutes.'
+                          'Analysis is running. This page keeps polling for up to 20 minutes.'
                         ) : (
                           'Batch finished. Open a dashboard for the full evidence report.'
                         )
@@ -929,10 +1292,49 @@ export function BulkUploadPage() {
 
                     <div className="flex flex-wrap items-center gap-2">
                       {response ? (
-                        <Button variant="secondary" size="sm" onClick={resetBatch}>
-                          <RefreshCw className="mr-2 h-4 w-4" />
-                          Start a new batch
-                        </Button>
+                        <>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={handleExportJSON}
+                            disabled={!isAllFinished}
+                            title={!isAllFinished ? 'Wait for all analyses to finish' : undefined}
+                          >
+                            <FileJson className="mr-1.5 h-3.5 w-3.5" />
+                            JSON
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={handleExportCSV}
+                            disabled={!isAllFinished}
+                            title={!isAllFinished ? 'Wait for all analyses to finish' : undefined}
+                          >
+                            <FileSpreadsheet className="mr-1.5 h-3.5 w-3.5" />
+                            CSV
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={handleExportPDF}
+                            disabled={!isAllFinished}
+                            title={!isAllFinished ? 'Wait for all analyses to finish' : undefined}
+                          >
+                            <Download className="mr-1.5 h-3.5 w-3.5" />
+                            PDF
+                          </Button>
+                          <a
+                            href="/bulk-upload?fresh=1"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-block"
+                          >
+                            <Button variant="secondary" size="sm">
+                              <RefreshCw className="mr-2 h-4 w-4" />
+                              Start a new batch ↗
+                            </Button>
+                          </a>
+                        </>
                       ) : (
                         <>
                           <Button

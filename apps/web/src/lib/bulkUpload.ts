@@ -1,7 +1,6 @@
 import type { BulkUploadCandidate } from './api'
 import { extractPdfText } from './pdf'
 
-/** Mirrors the limits enforced by `POST /interviews/bulk-upload`. */
 export const MAX_BULK_CANDIDATES = 50
 export const MAX_BULK_FILE_BYTES = 2 * 1024 * 1024
 
@@ -14,7 +13,6 @@ export interface PickedFile {
 }
 
 export interface CandidateDraft {
-  /** Stable identity used to keep typed names/emails when files are added or removed. */
   key: string
   candidateName: string
   candidateEmail: string
@@ -69,33 +67,29 @@ export function detectKind(filename: string): FileKind | null {
   return null
 }
 
-/**
- * Resolves the kind for a newly added file. Files without a keyword fall back
- * to the slot that is still free for the same base name, so `ahmed.txt` after
- * `ahmed-transcript.txt` is treated as the resume.
- */
+/** Resolves the kind for a newly added file. */
 export function inferKind(filename: string, existing: PickedFile[]): FileKind {
   const explicit = detectKind(filename)
   if (explicit) return explicit
-
   const key = baseKey(filename)
   const siblings = existing.filter((picked) => baseKey(picked.file.name) === key)
-
   if (siblings.some((picked) => picked.kind === 'transcript')) return 'resume'
-
   return 'transcript'
 }
 
 /**
  * Groups `ahmed-transcript.txt` with `ahmed-cv.pdf` by stripping the extension
  * and the transcript/resume keywords.
+ *
+ * STRICT MODE: Only removes the EXACT keywords (transcript, resume, cv, etc.).
+ * Everything else (e.g., "copy", "2", "final") is preserved to avoid accidental merging.
  */
 export function baseKey(filename: string): string {
-  const key = tokensOf(filename)
-    .filter((token) => !RESUME_TOKENS.has(token) && !TRANSCRIPT_TOKENS.has(token))
-    .join('-')
-
-  return key || tokensOf(filename).join('-') || 'candidate'
+  const tokens = tokensOf(filename)
+  const filtered = tokens.filter(
+    (token) => !RESUME_TOKENS.has(token) && !TRANSCRIPT_TOKENS.has(token)
+  )
+  return filtered.join('-') || tokens.join('-') || 'candidate'
 }
 
 export function candidateNameFromKey(key: string): string {
@@ -104,15 +98,24 @@ export function candidateNameFromKey(key: string): string {
     .filter(Boolean)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ')
-
   return name || 'Candidate'
 }
 
 /**
- * Pairs files into candidate rows. Files that share a base key but have the
- * same kind produce extra rows (e.g. two transcripts and two resumes).
+ * Result of buildCandidates:
+ * - candidates: rows with both transcript + resume (valid pairs)
+ * - orphans: files that did not find a matching pair (missing transcript or resume)
  */
-export function buildCandidates(files: PickedFile[]): CandidateDraft[] {
+export interface BuildResult {
+  candidates: CandidateDraft[]
+  orphans: PickedFile[]
+}
+
+/**
+ * Pairs files into candidate rows STRICTLY.
+ * If a file does not have a matching pair (same baseKey but different kind), it becomes an orphan.
+ */
+export function buildCandidates(files: PickedFile[]): BuildResult {
   const buckets = new Map<string, { transcript: PickedFile[]; resume: PickedFile[] }>()
 
   for (const picked of files) {
@@ -122,33 +125,47 @@ export function buildCandidates(files: PickedFile[]): CandidateDraft[] {
     buckets.set(key, bucket)
   }
 
-  const rows: CandidateDraft[] = []
+  const candidates: CandidateDraft[] = []
+  const orphans: PickedFile[] = []
 
   for (const [key, bucket] of buckets) {
-    const pairs = Math.max(bucket.transcript.length, bucket.resume.length)
-
-    for (let index = 0; index < pairs; index += 1) {
-      rows.push({
-        key: pairs > 1 ? `${key}#${index + 1}` : key,
-        candidateName: candidateNameFromKey(key),
-        candidateEmail: '',
-        transcript: bucket.transcript[index] ?? null,
-        resume: bucket.resume[index] ?? null,
-      })
+    // STRICT: Only create a row if BOTH transcript and resume exist
+    if (bucket.transcript.length > 0 && bucket.resume.length > 0) {
+      const pairs = Math.min(bucket.transcript.length, bucket.resume.length)
+      for (let i = 0; i < pairs; i++) {
+        candidates.push({
+          key: pairs > 1 ? `${key}#${i + 1}` : key,
+          candidateName: candidateNameFromKey(key),
+          candidateEmail: '',
+          transcript: bucket.transcript[i],
+          resume: bucket.resume[i],
+        })
+      }
+      // Any leftovers (e.g., 2 transcripts but 1 resume) are orphans
+      if (bucket.transcript.length > pairs) {
+        orphans.push(...bucket.transcript.slice(pairs))
+      }
+      if (bucket.resume.length > pairs) {
+        orphans.push(...bucket.resume.slice(pairs))
+      }
+    } else {
+      // No pair: all files in this bucket are orphans
+      orphans.push(...bucket.transcript, ...bucket.resume)
     }
   }
 
-  return rows.sort((a, b) => a.key.localeCompare(b.key))
+  return {
+    candidates: candidates.sort((a, b) => a.key.localeCompare(b.key)),
+    orphans,
+  }
 }
 
 /** Rebuilds rows after the file list changed, keeping anything the user typed. */
 export function mergeCandidates(previous: CandidateDraft[], next: CandidateDraft[]): CandidateDraft[] {
   const byKey = new Map(previous.map((row) => [row.key, row]))
-
   return next.map((row) => {
     const existing = byKey.get(row.key)
     if (!existing) return row
-
     return {
       ...row,
       candidateName: existing.candidateName,
@@ -176,22 +193,18 @@ export function rowIssues(rows: CandidateDraft[]): Record<string, string[]> {
 
   for (const row of rows) {
     const problems: string[] = []
-
     if (!row.transcript) problems.push('Missing transcript file')
     if (!row.resume) problems.push('Missing resume file')
     if (row.candidateName.trim().length < 2) problems.push('Candidate name is required')
     if (!isValidEmail(row.candidateEmail)) problems.push('Valid email is required')
-
     for (const picked of [row.transcript, row.resume]) {
       if (picked && (seenNames.get(picked.file.name) ?? 0) > 1) {
         problems.push(`Duplicate file name "${picked.file.name}"`)
         break
       }
     }
-
     if (problems.length > 0) issues[row.key] = problems
   }
-
   return issues
 }
 
@@ -225,21 +238,14 @@ export function metadataTemplate(): string {
   )
 }
 
-/**
- * The API reads every uploaded file as UTF-8 text, so PDFs must be converted
- * in the browser first. The original file name is kept because that is how the
- * backend matches files to candidates.
- */
+/** Converts PDFs to text in the browser. */
 export async function toUploadableFile(file: File): Promise<File> {
   const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
   if (!isPdf) return file
-
   const text = await extractPdfText(file)
-
   if (!text.trim()) {
     throw new Error(`No text found in "${file.name}". If it is a scanned PDF, upload a .txt version instead.`)
   }
-
   return new File([text], file.name, { type: 'text/plain' })
 }
 

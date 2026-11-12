@@ -55,6 +55,7 @@ export interface ProcessingResponse {
     isVerified: boolean
     isPlanned: boolean
   }
+  isQueued?: boolean
 }
 
 export interface TimeSavedBreakdown {

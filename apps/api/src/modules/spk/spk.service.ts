@@ -69,10 +69,8 @@ export class SpkService {
     });
 
     try {
-      const scorecard = session.scorecard;
-
       // ============================================================
-      // LLM Call #1: extract metadata (seniority, role, timezone, languages)
+      // LLM Call #1: extract metadata
       // ============================================================
       let metadata: {
         seniority: string | null;
@@ -86,7 +84,7 @@ export class SpkService {
         metadata = await this.llm.generate(metadataPrompt, SpkMetadataSchema);
         this.logger.log(`[SPK] Metadata extracted for ${interviewId}`);
       } catch (err: any) {
-        // Non-fatal: fall back to nulls so the SPK profile can still be built.
+        // ✅ Non-fatal: fall back to nulls so the SPK profile can still be built.
         this.logger.warn(
           `[SPK] Metadata extraction failed for ${interviewId}: ${err.message}. Using nulls.`,
         );
@@ -100,7 +98,7 @@ export class SpkService {
       }
 
       // ============================================================
-      // LLM Call #2: extract verified skills (skills the candidate PROVED)
+      // LLM Call #2: extract verified skills
       // ============================================================
       let verifiedSkills: string[] = [];
       try {
@@ -109,6 +107,7 @@ export class SpkService {
         verifiedSkills = result.verified_skills;
         this.logger.log(`[SPK] ${verifiedSkills.length} verified skills for ${interviewId}`);
       } catch (err: any) {
+        // ✅ Non-fatal: fall back to empty list so the SPK profile can still be built.
         this.logger.warn(
           `[SPK] Verified skills extraction failed for ${interviewId}: ${err.message}. Using empty list.`,
         );
@@ -186,9 +185,6 @@ export class SpkService {
 
     const payload = session.spkProfile.spkPayload as any;
 
-    // Recompute dynamic fields from the CURRENT DB state.
-    // Reason: a reviewer can confirm/dismiss discrepancies AFTER the SPK was built.
-    // The stored payload would otherwise return a stale human_review_status and count.
     const discrepancies = session.scorecard?.discrepancies ?? [];
     const pendingCount = discrepancies.filter((d) => d.status === 'PENDING').length;
     const humanReviewStatus: 'approved' | 'pending' | 'rejected' =
@@ -220,16 +216,6 @@ export class SpkService {
     await this.buildSpkProfile(interviewId);
   }
 
-  /**
-   * Builds the SPK payload.
-   *
-   * Key rules applied here:
-   * 1. A skill that appears in `recommended_upskilling` (a gap) is REMOVED from
-   *    `verified_skills`. Gaps stay as gaps. This prevents Docker from showing
-   *    up in both lists.
-   * 2. The roadmap is sorted by `week` ascending, so consumers always receive
-   *    Week 1 → Week N in order.
-   */
   private buildPayload(
     session: any,
     metadata: {
@@ -243,7 +229,6 @@ export class SpkService {
   ): SpkPayload {
     const scorecard = session.scorecard;
 
-    // ---- Dimensions (0-100 score) -------------------------------------------
     const dimensionCount = scorecard.dimensions.length || 1;
     const avgRaw =
       scorecard.dimensions.reduce((sum: number, d: any) => sum + d.score, 0) / dimensionCount;
@@ -261,7 +246,6 @@ export class SpkService {
       };
     });
 
-    // ---- Step 1: collect gaps from the scorecard ----------------------------
     const rawUpskilling = scorecard.dimensions.flatMap((d: any) =>
       d.skillGaps.map((g: any) => ({
         skill: g.skillName,
@@ -269,7 +253,6 @@ export class SpkService {
       })),
     );
 
-    // ---- Step 2: dedupe gaps by lowercase name ------------------------------
     const upskillMap = new Map<string, { skill: string; priority: 'LOW' | 'MEDIUM' | 'HIGH' }>();
     for (const item of rawUpskilling) {
       const key = item.skill.toLowerCase().trim();
@@ -279,26 +262,18 @@ export class SpkService {
     }
     const uniqueUpskilling = Array.from(upskillMap.values());
 
-    // ---- Step 3: build a lowercase set of gap skills ------------------------
     const gapsLower = new Set(uniqueUpskilling.map((item) => item.skill.toLowerCase().trim()));
 
-    // ---- Step 4: remove from `verified_skills` any skill that is a gap ------
-    // Use partial match (substring) so "Docker" (gap) also catches
-    // "Dockerfile", "Docker Compose", "Docker Swarm", etc. in verified skills.
-    // Rule from the product brief: "gaps keep gaps, and remove them from verified".
     const filteredVerifiedSkills = verifiedSkills.filter((skill) => {
       const skillLower = skill.toLowerCase().trim();
       for (const gap of gapsLower) {
         if (skillLower.includes(gap) || gap.includes(skillLower)) {
-          return false; // This verified skill is actually a gap → drop it.
+          return false;
         }
       }
       return true;
     });
 
-    // ---- Step 5: build roadmap, sorted by week ascending --------------------
-    // Sorting ensures consumers see Week 1 → Week N in order, regardless of
-    // the order the LLM returned them in.
     const roadmap = scorecard.roadmap
       ? scorecard.roadmap.items
           .map((item: any) => ({
@@ -310,13 +285,13 @@ export class SpkService {
           .sort((a: any, b: any) => a.week - b.week)
       : [];
 
-    // ---- Step 6: discrepancies (embedded for audit) ------------------------
     const discrepancies = scorecard.discrepancies.map((d: any) => ({
       field: d.claim,
       cv_says: d.cvQuote ?? '',
       interview_says: d.interviewQuote ?? '',
       status: DISCREPANCY_STATUS_MAP[d.status as keyof typeof DISCREPANCY_STATUS_MAP],
       confidence: d.confidence ?? 0,
+      reviewer_notes: d.reviewerNotes ?? null,
     }));
 
     const pendingCount = scorecard.discrepancies.filter(
@@ -325,18 +300,14 @@ export class SpkService {
     const humanReviewStatus: 'approved' | 'pending' | 'rejected' =
       pendingCount === 0 ? 'approved' : 'pending';
 
-    // ---- Final payload -----------------------------------------------------
     return {
       candidate_id: session.candidateId,
       candidate_name: session.candidate.name,
       overall_score: overallScore,
       confidence: scorecard.confidence ?? 0,
       dimensions,
-      // Verified skills, minus any that are also gaps.
       verified_skills: filteredVerifiedSkills,
-      // Gaps stay as gaps (not filtered).
       recommended_upskilling: uniqueUpskilling,
-      // Roadmap sorted by week ascending.
       roadmap,
       discrepancies,
       discrepancies_count: discrepancies.length,

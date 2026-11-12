@@ -33,6 +33,30 @@ const DISCREPANCY_STATUS_MAP = {
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 
+/**
+ * Sanitizes a filename so it can be matched regardless of how multer
+ * encodes it (spaces → underscores, non-ASCII → mangled).
+ *
+ * Strategy:
+ * - Lowercase.
+ * - Replace any sequence of non-alphanumeric characters (including spaces,
+ *   Arabic characters, parentheses) with a single underscore.
+ * - Collapse multiple underscores.
+ * - Trim leading/trailing underscores.
+ *
+ * Example:
+ *   "clean_interview - نسخة (10) - نسخة.txt"
+ *   → "clean_interview_10_txt"
+ */
+function sanitizeFilename(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/\.[^.]+$/, '') // strip extension
+    .replace(/[^a-z0-9]+/g, '_') // replace anything non-alphanumeric with _
+    .replace(/_+/g, '_') // collapse multiple underscores
+    .replace(/^_|_$/g, ''); // trim leading/trailing _
+}
+
 @Injectable()
 export class InterviewsService {
   private readonly logger = new Logger(InterviewsService.name);
@@ -100,6 +124,8 @@ export class InterviewsService {
         attempts: 1,
         backoff: { type: 'exponential', delay: 2000 },
         removeOnComplete: true,
+        delay: 2000,  // Delay 2 secons between each candidate (Help in Handling Bulk Upload)
+
       },
     );
 
@@ -146,19 +172,34 @@ export class InterviewsService {
       acceptedFiles.push(file);
     }
 
+    // ============================================================
+    // Build a lookup map with BOTH the raw name and the sanitized name.
+    // This makes matching resilient to spaces, Arabic, parentheses, etc.
+    // ============================================================
     const fileMap = new Map<string, Express.Multer.File>();
     for (const file of acceptedFiles) {
+      // Store by original name (case-preserved and lowercased)
       fileMap.set(file.originalname, file);
       fileMap.set(file.originalname.toLowerCase(), file);
+
+      // Store by sanitized name (used for fuzzy matching)
+      const sanitized = sanitizeFilename(file.originalname);
+      if (!fileMap.has(sanitized)) {
+        fileMap.set(sanitized, file);
+      }
     }
 
     const results: BulkUploadResult[] = [];
 
     for (const candidate of metadata) {
       try {
+        // Lookup transcript: try sanitized name first, then original, then lowercased
+        const sanitizedTranscript = sanitizeFilename(candidate.transcriptFileName);
         const transcriptFile =
+          fileMap.get(sanitizedTranscript) ??
           fileMap.get(candidate.transcriptFileName) ??
           fileMap.get(candidate.transcriptFileName.toLowerCase());
+
         if (!transcriptFile) {
           results.push({
             candidateName: candidate.candidateName,
@@ -169,9 +210,13 @@ export class InterviewsService {
           continue;
         }
 
+        // Lookup resume: same strategy
+        const sanitizedResume = sanitizeFilename(candidate.resumeFileName);
         const resumeFile =
+          fileMap.get(sanitizedResume) ??
           fileMap.get(candidate.resumeFileName) ??
           fileMap.get(candidate.resumeFileName.toLowerCase());
+
         if (!resumeFile) {
           results.push({
             candidateName: candidate.candidateName,
@@ -295,6 +340,7 @@ export class InterviewsService {
     }
 
     if (session.status !== 'COMPLETED' || !session.scorecard) {
+      const isQueued = session.status === 'QUEUED'; 
       return {
         status: 'processing',
         interviewId: session.id,
@@ -304,6 +350,7 @@ export class InterviewsService {
           isVerified: session.isVerified,
           isPlanned: session.isPlanned,
         },
+        isQueued,
       };
     }
 
@@ -379,7 +426,6 @@ export class InterviewsService {
       totalDiscrepancies,
       skillGaps,
       timeSaved,
-      // Issue 1 fix: expose SPK build status to the frontend
       spkStatus: (session as any).spkStatus ?? 'pending',
       spkError: (session as any).spkError ?? null,
     };
@@ -574,7 +620,6 @@ export class InterviewsService {
       discrepanciesCount * C.MINUTES_PER_DISCREPANCY +
       weakDimensionsCount * C.MINUTES_PER_WEAK_DIMENSION;
 
-    // Issue 4 fix: prefer completedAt over updatedAt
     const endTime = session.completedAt ?? session.updatedAt;
     const rawSeconds = Math.max(
       0,

@@ -15,6 +15,7 @@ interface MultiDropzoneProps {
 /** Drop target for several files at once (the single-file `Dropzone` only takes one). */
 export function MultiDropzone({
   id,
+  // ✅ فقط PDF و TXT
   accept = '.txt,.pdf,text/plain,application/pdf',
   disabled,
   hint,
