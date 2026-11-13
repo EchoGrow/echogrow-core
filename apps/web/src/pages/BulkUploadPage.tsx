@@ -11,6 +11,7 @@ import {
   FileSpreadsheet,
   FileText,
   FileUser,
+  GitCompare,
   Layers,
   RefreshCw,
   Sparkles,
@@ -83,14 +84,6 @@ function nextFileId(): string {
   return `file-${fileSeq}-${Date.now()}`
 }
 
-/**
- * Maps a scorecard response onto the row state used by the table.
- *
- * The backend returns `status: 'processing'` as soon as the job is queued.
- * We use `isQueued` (from the backend) to distinguish:
- *   - queued      → job is waiting in the queue (no flags set yet)
- *   - processing  → job is actively being processed
- */
 function toRowState(response: ScorecardResponse): RowState {
   switch (response.status) {
     case 'scored': {
@@ -427,14 +420,14 @@ export function BulkUploadPage() {
   /* ------------------------------------------------------------------ */
 
   const handleFiles = async (incoming: File[]) => {
-  if (busy) {
-    toast.info('This batch is locked', {
-      description: 'Start a new batch to add more candidates.',
-    })
-    return
-  }
+    if (busy) {
+      toast.info('This batch is locked', {
+        description: 'Start a new batch to add more candidates.',
+      })
+      return
+    }
 
-  const MAX_TOTAL_FILES = MAX_BULK_CANDIDATES * 2
+    const MAX_TOTAL_FILES = MAX_BULK_CANDIDATES * 2
     const currentCount = files.length
     const remainingSlots = MAX_TOTAL_FILES - currentCount
 
@@ -444,7 +437,7 @@ export function BulkUploadPage() {
       })
       return
     }
- 
+
     const validFiles = incoming.filter((file) => {
       const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
       const isTxt = file.type === 'text/plain' || file.name.toLowerCase().endsWith('.txt')
@@ -480,7 +473,7 @@ export function BulkUploadPage() {
       await new Promise((resolve) => setTimeout(resolve, 30))
       setParseProgress(Math.round(((i + 1) / total) * 100))
     }
- 
+
     const accepted: PickedFile[] = []
     const rejected: RejectedFileRecord[] = []
     const pool = [...files]
@@ -647,15 +640,17 @@ export function BulkUploadPage() {
 
   const getMergedResults = () => {
     if (!response) return []
-    return response.results.map((result) => {
-      const row = rows.find((r) => r.candidateEmail.trim() === result.candidateEmail)
-      const state = row ? rowState[row.key] : undefined
+    return rows.map((row) => {
+      const state = rowState[row.key]
+      const original = response.results.find(
+        (r) => r.candidateEmail.trim() === row.candidateEmail.trim(),
+      )
       return {
-        candidateName: result.candidateName,
-        candidateEmail: result.candidateEmail,
-        status: state?.status ?? result.status,
-        interviewId: result.interviewId,
-        error: state?.error ?? result.error,
+        candidateName: row.candidateName || original?.candidateName || 'Unknown',
+        candidateEmail: row.candidateEmail,
+        status: state?.status ?? original?.status ?? 'queued',
+        interviewId: state?.interviewId ?? original?.interviewId,
+        error: state?.error ?? original?.error,
       }
     })
   }
@@ -818,10 +813,16 @@ export function BulkUploadPage() {
           <div className="container-custom flex h-16 items-center justify-between gap-4">
             <Logo size="sm" />
             <div className="flex items-center gap-2">
+              <Link to="/compare">
+                <Button variant="ghost" size="sm">
+                  <GitCompare className="mr-2 h-4 w-4" />
+                  <span className="hidden sm:inline">Compare</span>
+                </Button>
+              </Link>
               <Link to="/upload">
                 <Button variant="ghost" size="sm">
                   <Sparkles className="mr-2 h-4 w-4" />
-                  Single upload
+                  <span className="hidden sm:inline">Single upload</span>
                 </Button>
               </Link>
               <ThemeToggle />
@@ -1245,7 +1246,6 @@ export function BulkUploadPage() {
                                 </td>
                               </tr>
 
-                              {/* Enhanced Inline Issues Design */}
                               {rowIssueList.length > 0 && !busy && (
                                 <tr className="border-b border-line last:border-0">
                                   <td />

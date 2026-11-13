@@ -202,7 +202,6 @@ export interface SpkExport {
 // Bulk Upload Types
 // ============================================================
 
-/** One candidate in the `metadata` part of a bulk upload. Files are matched by name. */
 export interface BulkUploadCandidate {
   candidateName: string
   candidateEmail: string
@@ -235,6 +234,85 @@ export interface BulkUploadResponse {
   results: BulkUploadResultRecord[]
   rejectedFiles: RejectedFileRecord[]
   summary: BulkUploadSummary
+}
+
+// ============================================================
+// Comparison Types
+// ============================================================
+
+export interface InterviewListItem {
+  id: string
+  candidateName: string
+  candidateEmail: string
+  completedAt: string | null
+  overallScore: number | null
+  pendingDiscrepancies: number
+  totalDiscrepancies: number
+  skillGaps: number
+}
+
+export interface InterviewListResponse {
+  interviews: InterviewListItem[]
+  total: number
+}
+
+export interface RankedCandidate {
+  interviewId: string
+  candidateName: string
+  rank: number
+  reason: string
+  fitScore?: number
+}
+
+export interface DimensionWinner {
+  dimension: 'Technical Depth' | 'Communication Clarity' | 'Domain Experience' | 'Problem Solving'
+  winnerInterviewId: string
+  winnerName: string
+  reason: string
+}
+
+export interface CandidatePoints {
+  interviewId: string
+  candidateName: string
+  points: string[]
+}
+
+export interface ComparisonResult {
+  summary: string
+  targetRole: string | null
+  ranking: RankedCandidate[]
+  perDimensionWinners: DimensionWinner[]
+  strengths: CandidatePoints[]
+  concerns: CandidatePoints[]
+  recommendation: string
+  confidence: number
+}
+
+export interface ComparisonDetailResponse {
+  id: string
+  targetRole: string | null
+  status: 'PROCESSING' | 'COMPLETED' | 'FAILED'
+  error: string | null
+  candidateCount: number
+  confidence: number | null
+  summary: string | null
+  recommendation: string | null
+  result: ComparisonResult | null
+  interviews: Array<{
+    interviewId: string
+    candidateName: string
+    candidateEmail: string
+    rank: number | null
+    fitScore: number | null
+  }>
+  rankings: Array<{
+    interviewId: string
+    rank: number
+    reason: string
+    fitScore: number | null
+  }>
+  createdAt: string
+  completedAt: string | null
 }
 
 export class ApiError extends Error {
@@ -329,12 +407,6 @@ export async function createInterview(input: CreateInterviewRequest): Promise<Cr
 
 const BULK_UPLOAD_TIMEOUT_MS = 120_000
 
-/**
- * Sends every file plus the candidate metadata in one multipart request.
- *
- * The API matches files to candidates by `File.name`, so names are sent as-is
- * (the caller is responsible for keeping them unique).
- */
 export async function bulkUploadInterviews(
   files: File[],
   metadata: BulkUploadCandidate[],
@@ -635,8 +707,6 @@ export async function rebuildSpkProfile(
   interviewId: string,
 ): Promise<{ interviewId: string; status: string }> {
   const controller = new AbortController()
-  // 10s is enough to confirm the request reached the server.
-  // The actual rebuild runs in the background and is tracked by polling.
   const timeout = window.setTimeout(() => controller.abort(), 10_000)
 
   try {
@@ -652,6 +722,90 @@ export async function rebuildSpkProfile(
     if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
 
     return (await response.json()) as { interviewId: string; status: string }
+  } catch (cause) {
+    if (cause instanceof ApiError) throw cause
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw new ApiError('The request timed out. Check your connection and try again.')
+    }
+    throw new ApiError('Could not reach the server. Check your connection and try again.')
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
+// ============================================================
+// Compare API
+// ============================================================
+
+export async function getCompletedInterviews(): Promise<InterviewListResponse> {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/interviews`, {
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    })
+
+    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+
+    return (await response.json()) as InterviewListResponse
+  } catch (cause) {
+    if (cause instanceof ApiError) throw cause
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw new ApiError('The request timed out. Check your connection and try again.')
+    }
+    throw new ApiError('Could not reach the server. Check your connection and try again.')
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
+export async function compareCandidates(
+  interviewIds: string[],
+  targetRole?: string,
+): Promise<{ id: string; result: ComparisonResult }> {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), 120_000)
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/interviews/compare`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        interviewIds,
+        ...(targetRole ? { targetRole } : {}),
+      }),
+      signal: controller.signal,
+    })
+
+    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+
+    return (await response.json()) as { id: string; result: ComparisonResult }
+  } catch (cause) {
+    if (cause instanceof ApiError) throw cause
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw new ApiError('The comparison timed out. Try again with fewer candidates.')
+    }
+    throw new ApiError('Could not reach the server. Check your connection and try again.')
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
+export async function getComparison(id: string): Promise<ComparisonDetailResponse> {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/interviews/compare/${encodeURIComponent(id)}`,
+      { headers: { Accept: 'application/json' }, signal: controller.signal },
+    )
+
+    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+
+    return (await response.json()) as ComparisonDetailResponse
   } catch (cause) {
     if (cause instanceof ApiError) throw cause
     if (cause instanceof DOMException && cause.name === 'AbortError') {

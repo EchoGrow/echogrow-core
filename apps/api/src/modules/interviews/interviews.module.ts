@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
+import { BullModule } from '@nestjs/bullmq';
 import { InterviewsService } from './interviews.service';
 import { InterviewsController } from './interviews.controller';
-import { BullModule } from '@nestjs/bullmq';
-import { EvaluationModule } from '../evaluation/evaluation.module'; 
+import { EvaluationModule } from '../evaluation/evaluation.module';
 
 @Module({
   imports: [

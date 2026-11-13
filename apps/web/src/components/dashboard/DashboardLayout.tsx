@@ -1,7 +1,14 @@
 import { useEffect, type ReactNode } from 'react'
 import { Link, NavLink, Outlet, useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { LayoutDashboard, ListChecks, ShieldAlert, TrendingUp, Plus } from 'lucide-react'
+import {
+  LayoutDashboard,
+  ListChecks,
+  ShieldAlert,
+  TrendingUp,
+  Plus,
+  GitCompare,
+} from 'lucide-react'
 import { Logo } from '../brand/Logo'
 import { ThemeToggle } from '../ThemeToggle'
 import { Button, toast } from '../ui'
@@ -23,6 +30,12 @@ function DashboardHeader() {
           <span className="hidden truncate text-sm text-fg-muted sm:block">Interview report</span>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <Link to="/compare">
+            <Button variant="ghost" size="sm">
+              <GitCompare className="h-4 w-4" />
+              <span className="hidden sm:inline">Compare</span>
+            </Button>
+          </Link>
           <Button variant="secondary" size="sm" onClick={() => navigate('/upload')}>
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">New analysis</span>

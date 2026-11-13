@@ -19,6 +19,11 @@ const MAX_FILES = MAX_CANDIDATES * 2;
 export class InterviewsController {
   constructor(private readonly interviewsService: InterviewsService) {}
 
+  @Get()
+  async list() {
+    return this.interviewsService.findAllCompleted();
+  }
+
   @Post('upload')
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   async upload(@Body() body: any) {
