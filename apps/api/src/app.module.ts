@@ -11,13 +11,12 @@ import { DiscrepancyModule } from './modules/discrepancy/discrepancy.module';
 import { RoadmapModule } from './modules/roadmap/roadmap.module';
 import { SpkModule } from './modules/spk/spk.module';
 import { PipelineModule } from './modules/pipeline/pipeline.module';
+import { CompareModule } from './modules/compare/compare.module';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 
 @Module({
   imports: [
-    // Rate limiting: production = 10 req/min per IP. Tests = 1000 (so that
-    // long E2E suites do not trip the limit).
     ThrottlerModule.forRoot([
       {
         ttl: 60_000,
@@ -43,6 +42,7 @@ import { APP_GUARD } from '@nestjs/core';
     RoadmapModule,
     SpkModule,
     PipelineModule,
+    CompareModule,
   ],
   controllers: [AppController],
   providers: [

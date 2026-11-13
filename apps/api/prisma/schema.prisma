@@ -63,6 +63,9 @@ model InterviewSession {
   scorecard Scorecard?
   spkProfile SpkProfile?
 
+  comparisonInterviews ComparisonInterview[]
+  comparisonRankings   ComparisonRanking[]
+
   @@index([candidateId])
   @@index([transcriptHash])
   @@index([resumeHash])
@@ -231,4 +234,70 @@ model SpkProfile {
 
   @@index([interviewId])
   @@map("spk_profiles")
+}
+
+// Comparison Models
+enum ComparisonStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+
+  @@map("comparison_status")
+}
+
+model Comparison {
+  id             String             @id @default(cuid())
+  targetRole     String?            @map("target_role")
+  status         ComparisonStatus   @default(PROCESSING)
+  error          String?            @db.Text
+
+  candidateCount Int                @default(0) @map("candidate_count")
+  confidence     Float?
+  summary        String?            @db.Text
+  recommendation String?            @db.Text
+
+  result         Json?              @map("result")
+
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+  completedAt    DateTime?          @map("completed_at")
+
+  interviews     ComparisonInterview[]
+  rankings       ComparisonRanking[]
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("comparisons")
+}
+
+model ComparisonInterview {
+  id           String   @id @default(cuid())
+  comparisonId String   @map("comparison_id")
+  interviewId  String   @map("interview_id")
+  rank         Int?
+  fitScore     Float?   @map("fit_score")
+
+  comparison Comparison       @relation(fields: [comparisonId], references: [id], onDelete: Cascade)
+  interview  InterviewSession @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+
+  @@unique([comparisonId, interviewId])
+  @@index([comparisonId])
+  @@index([interviewId])
+  @@map("comparison_interviews")
+}
+
+model ComparisonRanking {
+  id           String   @id @default(cuid())
+  comparisonId String   @map("comparison_id")
+  interviewId  String   @map("interview_id")
+  rank         Int
+  reason       String   @db.Text
+  fitScore     Float?   @map("fit_score")
+
+  comparison Comparison       @relation(fields: [comparisonId], references: [id], onDelete: Cascade)
+  interview  InterviewSession @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+
+  @@unique([comparisonId, interviewId])
+  @@index([comparisonId])
+  @@map("comparison_rankings")
 }

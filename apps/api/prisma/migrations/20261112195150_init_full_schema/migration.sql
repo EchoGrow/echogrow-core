@@ -16,6 +16,9 @@ CREATE TYPE "discrepancy_severity" AS ENUM ('LOW', 'MEDIUM', 'HIGH');
 -- CreateEnum
 CREATE TYPE "skill_gap_priority" AS ENUM ('LOW', 'MEDIUM', 'HIGH');
 
+-- CreateEnum
+CREATE TYPE "comparison_status" AS ENUM ('PROCESSING', 'COMPLETED', 'FAILED');
+
 -- CreateTable
 CREATE TABLE "candidates" (
     "id" TEXT NOT NULL,
@@ -146,6 +149,47 @@ CREATE TABLE "spk_profiles" (
     CONSTRAINT "spk_profiles_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "comparisons" (
+    "id" TEXT NOT NULL,
+    "target_role" TEXT,
+    "status" "comparison_status" NOT NULL DEFAULT 'PROCESSING',
+    "error" TEXT,
+    "candidate_count" INTEGER NOT NULL DEFAULT 0,
+    "confidence" DOUBLE PRECISION,
+    "summary" TEXT,
+    "recommendation" TEXT,
+    "result" JSONB,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+    "completed_at" TIMESTAMP(3),
+
+    CONSTRAINT "comparisons_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "comparison_interviews" (
+    "id" TEXT NOT NULL,
+    "comparison_id" TEXT NOT NULL,
+    "interview_id" TEXT NOT NULL,
+    "rank" INTEGER,
+    "fit_score" DOUBLE PRECISION,
+
+    CONSTRAINT "comparison_interviews_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "comparison_rankings" (
+    "id" TEXT NOT NULL,
+    "comparison_id" TEXT NOT NULL,
+    "interview_id" TEXT NOT NULL,
+    "rank" INTEGER NOT NULL,
+    "reason" TEXT NOT NULL,
+    "fit_score" DOUBLE PRECISION,
+
+    CONSTRAINT "comparison_rankings_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "candidates_email_key" ON "candidates"("email");
 
@@ -191,6 +235,27 @@ CREATE UNIQUE INDEX "spk_profiles_interview_id_key" ON "spk_profiles"("interview
 -- CreateIndex
 CREATE INDEX "spk_profiles_interview_id_idx" ON "spk_profiles"("interview_id");
 
+-- CreateIndex
+CREATE INDEX "comparisons_status_idx" ON "comparisons"("status");
+
+-- CreateIndex
+CREATE INDEX "comparisons_created_at_idx" ON "comparisons"("created_at");
+
+-- CreateIndex
+CREATE INDEX "comparison_interviews_comparison_id_idx" ON "comparison_interviews"("comparison_id");
+
+-- CreateIndex
+CREATE INDEX "comparison_interviews_interview_id_idx" ON "comparison_interviews"("interview_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "comparison_interviews_comparison_id_interview_id_key" ON "comparison_interviews"("comparison_id", "interview_id");
+
+-- CreateIndex
+CREATE INDEX "comparison_rankings_comparison_id_idx" ON "comparison_rankings"("comparison_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "comparison_rankings_comparison_id_interview_id_key" ON "comparison_rankings"("comparison_id", "interview_id");
+
 -- AddForeignKey
 ALTER TABLE "interview_sessions" ADD CONSTRAINT "interview_sessions_candidate_id_fkey" FOREIGN KEY ("candidate_id") REFERENCES "candidates"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
@@ -217,3 +282,15 @@ ALTER TABLE "roadmap_items" ADD CONSTRAINT "roadmap_items_skill_gap_id_fkey" FOR
 
 -- AddForeignKey
 ALTER TABLE "spk_profiles" ADD CONSTRAINT "spk_profiles_interview_id_fkey" FOREIGN KEY ("interview_id") REFERENCES "interview_sessions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "comparison_interviews" ADD CONSTRAINT "comparison_interviews_comparison_id_fkey" FOREIGN KEY ("comparison_id") REFERENCES "comparisons"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "comparison_interviews" ADD CONSTRAINT "comparison_interviews_interview_id_fkey" FOREIGN KEY ("interview_id") REFERENCES "interview_sessions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "comparison_rankings" ADD CONSTRAINT "comparison_rankings_comparison_id_fkey" FOREIGN KEY ("comparison_id") REFERENCES "comparisons"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "comparison_rankings" ADD CONSTRAINT "comparison_rankings_interview_id_fkey" FOREIGN KEY ("interview_id") REFERENCES "interview_sessions"("id") ON DELETE CASCADE ON UPDATE CASCADE;

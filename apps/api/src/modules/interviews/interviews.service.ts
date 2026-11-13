@@ -14,6 +14,8 @@ import {
   ScorecardSchema,
   BulkUploadMetadataSchema,
   BulkUploadResult,
+  type InterviewListItem,
+  type InterviewListResponse,
 } from '@echogrow/shared';
 import { createHash } from 'crypto';
 import { TranscriptParserService } from '../evaluation/transcript-parser.service';
@@ -33,28 +35,13 @@ const DISCREPANCY_STATUS_MAP = {
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 
-/**
- * Sanitizes a filename so it can be matched regardless of how multer
- * encodes it (spaces → underscores, non-ASCII → mangled).
- *
- * Strategy:
- * - Lowercase.
- * - Replace any sequence of non-alphanumeric characters (including spaces,
- *   Arabic characters, parentheses) with a single underscore.
- * - Collapse multiple underscores.
- * - Trim leading/trailing underscores.
- *
- * Example:
- *   "clean_interview - نسخة (10) - نسخة.txt"
- *   → "clean_interview_10_txt"
- */
 function sanitizeFilename(name: string): string {
   return name
     .toLowerCase()
-    .replace(/\.[^.]+$/, '') // strip extension
-    .replace(/[^a-z0-9]+/g, '_') // replace anything non-alphanumeric with _
-    .replace(/_+/g, '_') // collapse multiple underscores
-    .replace(/^_|_$/g, ''); // trim leading/trailing _
+    .replace(/\.[^.]+$/, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '');
 }
 
 @Injectable()
@@ -124,8 +111,7 @@ export class InterviewsService {
         attempts: 1,
         backoff: { type: 'exponential', delay: 2000 },
         removeOnComplete: true,
-        delay: 2000,  // Delay 2 secons between each candidate (Help in Handling Bulk Upload)
-
+        delay: 2000,
       },
     );
 
@@ -172,17 +158,11 @@ export class InterviewsService {
       acceptedFiles.push(file);
     }
 
-    // ============================================================
-    // Build a lookup map with BOTH the raw name and the sanitized name.
-    // This makes matching resilient to spaces, Arabic, parentheses, etc.
-    // ============================================================
     const fileMap = new Map<string, Express.Multer.File>();
     for (const file of acceptedFiles) {
-      // Store by original name (case-preserved and lowercased)
       fileMap.set(file.originalname, file);
       fileMap.set(file.originalname.toLowerCase(), file);
 
-      // Store by sanitized name (used for fuzzy matching)
       const sanitized = sanitizeFilename(file.originalname);
       if (!fileMap.has(sanitized)) {
         fileMap.set(sanitized, file);
@@ -193,7 +173,6 @@ export class InterviewsService {
 
     for (const candidate of metadata) {
       try {
-        // Lookup transcript: try sanitized name first, then original, then lowercased
         const sanitizedTranscript = sanitizeFilename(candidate.transcriptFileName);
         const transcriptFile =
           fileMap.get(sanitizedTranscript) ??
@@ -210,7 +189,6 @@ export class InterviewsService {
           continue;
         }
 
-        // Lookup resume: same strategy
         const sanitizedResume = sanitizeFilename(candidate.resumeFileName);
         const resumeFile =
           fileMap.get(sanitizedResume) ??
@@ -340,7 +318,7 @@ export class InterviewsService {
     }
 
     if (session.status !== 'COMPLETED' || !session.scorecard) {
-      const isQueued = session.status === 'QUEUED'; 
+      const isQueued = session.status === 'QUEUED';
       return {
         status: 'processing',
         interviewId: session.id,
@@ -588,6 +566,56 @@ export class InterviewsService {
     };
 
     return RoadmapResponseSchema.parse(response);
+  }
+
+  async findAllCompleted(): Promise<InterviewListResponse> {
+    const sessions = await this.prisma.interviewSession.findMany({
+      where: { status: 'COMPLETED' },
+      include: {
+        candidate: { select: { name: true, email: true } },
+        scorecard: {
+          include: {
+            dimensions: { select: { score: true } },
+            discrepancies: { select: { status: true } },
+            roadmap: {
+              select: {
+                items: { select: { id: true } },
+              },
+            },
+          },
+        },
+      },
+      orderBy: { completedAt: 'desc' },
+      take: 200,
+    });
+
+    const interviews: InterviewListItem[] = sessions
+      .filter((s) => s.scorecard)
+      .map((s) => {
+        const dims = s.scorecard!.dimensions;
+        const overallScore =
+          dims.length > 0
+            ? Math.round(
+                (dims.reduce((sum, d) => sum + d.score, 0) / dims.length) * 10,
+              ) / 10
+            : null;
+
+        return {
+          id: s.id,
+          candidateName: s.candidate.name,
+          candidateEmail: s.candidate.email,
+          completedAt: s.completedAt?.toISOString() ?? null,
+          overallScore,
+          pendingDiscrepancies: s.scorecard!.discrepancies.filter(
+            (d) => d.status === 'PENDING',
+          ).length,
+          totalDiscrepancies: s.scorecard!.discrepancies.length,
+          skillGaps: s.scorecard!.roadmap?.items.length ?? 0,
+        };
+      });
+
+    this.logger.log(`Found ${interviews.length} completed interviews`);
+    return { interviews, total: interviews.length };
   }
 
   private computeTimeSavedFallback(
