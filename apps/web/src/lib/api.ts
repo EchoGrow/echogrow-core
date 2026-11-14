@@ -35,13 +35,19 @@ export interface ScorecardDimension {
   timestamp?: string
 }
 
+export interface SpeakerTurn {
+  speaker: string
+  text: string
+  timestamp?: string
+}
+
 export interface NeedsReviewResponse {
   status: 'needs_review'
   interviewId: string
   candidateName: string
   transcript: string
   resume: string
-  structuredTranscript?: unknown
+  structuredTranscript?: SpeakerTurn[] | null
   confidence: number
   message: string
 }
@@ -80,6 +86,7 @@ export interface ScoredResponse {
   candidateName: string
   interviewDate: string
   dimensions: ScorecardDimension[]
+  structuredTranscript?: SpeakerTurn[] | null
   overallConfidence: number
   pendingDiscrepancies: number
   totalDiscrepancies: number
