@@ -439,17 +439,27 @@ describe('E2E: Full Pipeline — Seed Scenarios', () => {
       expect(body.generated_at).toBeTruthy();
     });
 
-    it('POST /spk-rebuild returns 404 for unknown interview', async () => {
-      const res = await api().post('/interviews/does-not-exist/spk-rebuild').expect(404);
-      expect(res.body.message).toMatch(/not found/i);
+    it('POST /spk-rebuild returns 202 for unknown interview (fire-and-forget)', async () => {
+      // 202 = Accepted. The background rebuild logs the 404 internally
+      // (rebuildSpkProfile throws NotFoundException, the controller's catch
+      // swallows it). The client learns about the failure via spkStatus.
+      const res = await api()
+        .post('/interviews/does-not-exist/spk-rebuild')
+        .expect(202);
+
+      expect(res.body.interviewId).toBe('does-not-exist');
+      expect(res.body.status).toBe('building');
     });
 
-    it('POST /spk-rebuild rebuilds a COMPLETED interview', async () => {
-      const { body } = await api().post(`/interviews/${interviewId}/spk-rebuild`).expect(201);
-      expect(body.interviewId).toBe(interviewId);
-      expect(body.status).toBe('rebuilt');
+    it('POST /spk-rebuild returns 202 and rebuilds a COMPLETED interview', async () => {
+      const { body } = await api()
+        .post(`/interviews/${interviewId}/spk-rebuild`)
+        .expect(202);
 
-      // Wait for spkStatus to become 'ready' again.
+      expect(body.interviewId).toBe(interviewId);
+      expect(body.status).toBe('building');  // ← 'building' وليس 'rebuilt'
+
+      // Wait for spkStatus to become 'ready' again (existing loop — keep as is).
       const deadline = Date.now() + 180_000;
       while (Date.now() < deadline) {
         const session = await prisma.interviewSession.findUnique({
