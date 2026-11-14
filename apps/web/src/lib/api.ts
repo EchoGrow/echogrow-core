@@ -1,10 +1,19 @@
+import type {
+  AnalyticsSummary,
+  AnalyticsRange,
+  AnalyticsDetailType,
+  AnalyticsDetailResponse,
+} from '@echogrow/shared'
+
 const API_BASE_URL = (import.meta.env.VITE_API_URL ?? '/api').replace(/\/+$/, '')
-const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true'
+
 const REQUEST_TIMEOUT_MS = 30_000
 
 export interface CreateInterviewRequest {
-  transcript: string
-  cv: string
+  candidateName: string;
+  candidateEmail: string;
+  transcript: string;
+  cv: string;
 }
 
 export interface CreateInterviewResponse {
@@ -12,8 +21,378 @@ export interface CreateInterviewResponse {
   status: string
 }
 
+export type DimensionName =
+  | 'Technical Depth'
+  | 'Communication Clarity'
+  | 'Domain Experience'
+  | 'Problem Solving'
+
+export interface ScorecardDimension {
+  name: DimensionName
+  score: number
+  reason: string
+  evidenceQuote: string
+  timestamp?: string
+}
+
+export interface SpeakerTurn {
+  speaker: string
+  text: string
+  timestamp?: string
+}
+
+export interface NeedsReviewResponse {
+  status: 'needs_review'
+  interviewId: string
+  candidateName: string
+  transcript: string
+  resume: string
+  structuredTranscript?: SpeakerTurn[] | null
+  confidence: number
+  message: string
+}
+
+export interface RejectedResponse {
+  status: 'rejected'
+  interviewId: string
+  candidateName: string
+  message: string
+}
+
+export interface ProcessingResponse {
+  status: 'processing'
+  interviewId: string
+  candidateName: string
+  progress: {
+    isScored: boolean
+    isVerified: boolean
+    isPlanned: boolean
+  }
+  isQueued?: boolean
+}
+
+export interface TimeSavedBreakdown {
+  manualMinutes: number;
+  echoGrowSeconds: number;
+  savedMinutes: number;
+  savedSeconds: number;
+}
+
+export type SpkStatus = 'pending' | 'building' | 'ready' | 'failed';
+
+export interface ScoredResponse {
+  status: 'scored'
+  interviewId: string
+  candidateName: string
+  interviewDate: string
+  dimensions: ScorecardDimension[]
+  structuredTranscript?: SpeakerTurn[] | null
+  overallConfidence: number
+  pendingDiscrepancies: number
+  totalDiscrepancies: number
+  skillGaps: number
+  timeSaved?: TimeSavedBreakdown
+  spkStatus?: SpkStatus
+  spkError?: string | null
+  progress?: {
+    isScored: boolean
+    isVerified: boolean
+    isPlanned: boolean
+  }
+}
+
+export interface FailedResponse {
+  status: 'failed'
+  interviewId: string
+  candidateName: string
+  message: string
+}
+
+export type DiscrepancyStatus = 'pending' | 'confirmed' | 'dismissed'
+
+export type DiscrepancySeverity = 'low' | 'medium' | 'high'
+
+export interface DiscrepancyRecord {
+  id: string
+  field: string
+  cvSays: string
+  interviewSays: string
+  cvQuote: string
+  interviewQuote: string
+  confidence: number
+  severity: DiscrepancySeverity
+  action: 'flag_for_human_review'
+  status: DiscrepancyStatus
+  reviewerNotes: string | null
+}
+
+export interface DiscrepancyResponse {
+  discrepancies: DiscrepancyRecord[]
+}
+
+export type ScorecardResponse =
+  | NeedsReviewResponse
+  | ScoredResponse
+  | RejectedResponse
+  | ProcessingResponse
+  | FailedResponse
+
+// ============================================================
+// Roadmap Types
+// ============================================================
+export type SkillGapPriority = 'LOW' | 'MEDIUM' | 'HIGH';
+
+export interface SkillGapRecord {
+  skillName: string;
+  priority: SkillGapPriority;
+}
+
+export interface RoadmapItemRecord {
+  week: number;
+  task: string;
+  resourceUrl: string | null;
+  skillName: string;
+}
+
+export interface RoadmapResponse {
+  gaps: SkillGapRecord[];
+  roadmap: RoadmapItemRecord[];
+}
+
+// ============================================================
+// SPK Export Types
+// ============================================================
+export interface SpkDimension {
+  name: string;
+  score: number;
+  raw_score: number;
+  reason?: string;
+  evidence_quote?: string;
+  evidence_timestamp?: string;
+}
+
+export interface SpkDiscrepancy {
+  field: string;
+  cv_says: string;
+  interview_says: string;
+  status: 'pending' | 'confirmed' | 'dismissed';
+  confidence: number;
+}
+
+export interface SpkSkillGap {
+  skill: string;
+  priority: 'LOW' | 'MEDIUM' | 'HIGH';
+}
+
+export interface SpkRoadmapItem {
+  week: number;
+  skill: string;
+  task: string;
+  resource_url?: string | null;
+}
+
+export interface SpkExport {
+  candidate_id: string;
+  candidate_name: string;
+  overall_score: number;
+  confidence: number;
+  dimensions: SpkDimension[];
+  verified_skills: string[];
+  recommended_upskilling: SpkSkillGap[];
+  roadmap: SpkRoadmapItem[];
+  discrepancies: SpkDiscrepancy[];
+  discrepancies_count: number;
+  human_review_status: 'approved' | 'pending' | 'rejected';
+  seniority: string | null;
+  primary_role: string | null;
+  timezone: string | null;
+  languages: string[] | null;
+  years_of_experience: number | null;
+  generated_at: string;
+  schema_version: string;
+}
+
+// ============================================================
+// Bulk Upload Types
+// ============================================================
+
+export interface BulkUploadCandidate {
+  candidateName: string
+  candidateEmail: string
+  transcriptFileName: string
+  resumeFileName: string
+}
+
+export interface BulkUploadResultRecord {
+  candidateName: string
+  candidateEmail: string
+  status: 'queued' | 'error'
+  interviewId?: string
+  error?: string
+}
+
+export interface RejectedFileRecord {
+  filename: string
+  reason: string
+  sizeBytes: number
+}
+
+export interface BulkUploadSummary {
+  total: number
+  queued: number
+  failed: number
+  rejectedFilesCount: number
+}
+
+export interface BulkUploadResponse {
+  results: BulkUploadResultRecord[]
+  rejectedFiles: RejectedFileRecord[]
+  summary: BulkUploadSummary
+}
+
+// ============================================================
+// Comparison Types
+// ============================================================
+
+export interface InterviewListItem {
+  id: string
+  candidateName: string
+  candidateEmail: string
+  completedAt: string | null
+  overallScore: number | null
+  pendingDiscrepancies: number
+  totalDiscrepancies: number
+  skillGaps: number
+  // ✅ NEW: retry tracking
+  processingAttempts: number
+}
+
+export interface InterviewListResponse {
+  interviews: InterviewListItem[]
+  total: number
+}
+
+export interface RankedCandidate {
+  interviewId: string
+  candidateName: string
+  rank: number
+  reason: string
+  fitScore?: number
+}
+
+export interface DimensionWinner {
+  dimension: 'Technical Depth' | 'Communication Clarity' | 'Domain Experience' | 'Problem Solving'
+  winnerInterviewId: string
+  winnerName: string
+  reason: string
+}
+
+export interface CandidatePoints {
+  interviewId: string
+  candidateName: string
+  points: string[]
+}
+
+export interface ComparisonResult {
+  summary: string
+  targetRole: string | null
+  ranking: RankedCandidate[]
+  perDimensionWinners: DimensionWinner[]
+  strengths: CandidatePoints[]
+  concerns: CandidatePoints[]
+  recommendation: string
+  confidence: number
+}
+
+export interface ComparisonDetailResponse {
+  id: string
+  targetRole: string | null
+  status: 'PROCESSING' | 'COMPLETED' | 'FAILED'
+  error: string | null
+  candidateCount: number
+  confidence: number | null
+  summary: string | null
+  recommendation: string | null
+  result: ComparisonResult | null
+  interviews: Array<{
+    interviewId: string
+    candidateName: string
+    candidateEmail: string
+    rank: number | null
+    fitScore: number | null
+  }>
+  rankings: Array<{
+    interviewId: string
+    rank: number
+    reason: string
+    fitScore: number | null
+  }>
+  createdAt: string
+  completedAt: string | null
+}
+
+// ============================================================
+// Analytics Types (complements the shared Zod schemas)
+// ============================================================
+
+export interface AnalyticsKpiSummary {
+  totalInterviews: number
+  completedInterviews: number
+  failedInterviews: number
+  needsReviewInterviews: number
+  rejectedInterviews: number
+  completionRate: number
+  avgProcessingTimeSeconds: number
+  avgManualReviewSeconds: number
+  avgSavedSeconds: number
+  retriedInterviews: number
+  avgProcessingAttempts: number
+  avgDiscrepanciesPerInterview: number
+  avgSkillGapsPerInterview: number
+  avgOverallScore: number
+}
+
+export interface RecentInterviewRecord {
+  id: string
+  candidateName: string
+  candidateEmail: string
+  status: string
+  overallScore: number | null
+  pendingDiscrepancies: number
+  completedAt: string | null
+  createdAt: string
+  processingAttempts: number
+}
+
+export interface ProcessingTimeRecord {
+  interviewId: string
+  candidateName: string
+  candidateEmail: string
+  processingSeconds: number
+  manualReviewSeconds: number
+  savedSeconds: number
+  savingsPercent: number
+  completedAt: string | null
+  processingAttempts: number      // ✅ NEW
+}
+
+export interface InterviewDetailRecord {
+  id: string
+  candidateName: string
+  candidateEmail: string
+  status: string
+  overallScore: number | null
+  pendingDiscrepancies: number
+  totalDiscrepancies: number
+  skillGaps: number
+  createdAt: string
+  completedAt: string | null
+  processingAttempts: number      // ✅ NEW
+}
+
 export class ApiError extends Error {
   readonly status: number
+
   constructor(message: string, status = 0) {
     super(message)
     this.name = 'ApiError'
@@ -42,27 +421,35 @@ function fallbackMessage(status: number): string {
 async function readErrorMessage(response: Response): Promise<string> {
   try {
     const body: unknown = await response.json()
+
     if (body && typeof body === 'object') {
       const record = body as { message?: unknown; error?: unknown }
-      if (typeof record.message === 'string' && record.message.trim()) return record.message
+
+      if (typeof record.message === 'string' && record.message.trim()) {
+        return record.message
+      }
+
       if (record.error && typeof record.error === 'object') {
         const nested = (record.error as { message?: unknown }).message
+
         if (typeof nested === 'string' && nested.trim()) return nested
       }
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
+
   return fallbackMessage(response.status)
 }
 
-async function mockCreateInterview(): Promise<CreateInterviewResponse> {
-  await new Promise((resolve) => setTimeout(resolve, 900))
-  return { interviewId: crypto.randomUUID(), status: 'queued' }
-}
+// ============================================================
+// Real API
+// ============================================================
 
 export async function createInterview(input: CreateInterviewRequest): Promise<CreateInterviewResponse> {
-  if (USE_MOCK) return mockCreateInterview()
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+
   try {
     const response = await fetch(`${API_BASE_URL}/interviews/upload`, {
       method: 'POST',
@@ -70,13 +457,496 @@ export async function createInterview(input: CreateInterviewRequest): Promise<Cr
       body: JSON.stringify(input),
       signal: controller.signal,
     })
+
     if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+
     const data = (await response.json()) as Partial<CreateInterviewResponse>
-    if (!data.interviewId) throw new ApiError('The server response did not include an interviewId.', response.status)
+
+    if (!data.interviewId) {
+      throw new ApiError('The server response did not include an interviewId.', response.status)
+    }
+
     return { interviewId: data.interviewId, status: data.status ?? 'queued' }
   } catch (cause) {
     if (cause instanceof ApiError) throw cause
-    if (cause instanceof DOMException && cause.name === 'AbortError') throw new ApiError('The request timed out. Check your connection and try again.')
+
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw new ApiError('The request timed out. Check your connection and try again.')
+    }
+
+    throw new ApiError('Could not reach the server. Check your connection and try again.')
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
+const BULK_UPLOAD_TIMEOUT_MS = 120_000
+
+export async function bulkUploadInterviews(
+  files: File[],
+  metadata: BulkUploadCandidate[],
+): Promise<BulkUploadResponse> {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), BULK_UPLOAD_TIMEOUT_MS)
+
+  try {
+    const form = new FormData()
+    for (const file of files) form.append('files', file, file.name)
+    form.append('metadata', JSON.stringify(metadata))
+
+    const response = await fetch(`${API_BASE_URL}/interviews/bulk-upload`, {
+      method: 'POST',
+      headers: { Accept: 'application/json' },
+      body: form,
+      signal: controller.signal,
+    })
+
+    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+
+    const data = (await response.json()) as Partial<BulkUploadResponse>
+
+    if (!Array.isArray(data.results)) {
+      throw new ApiError('The server response did not include a results array.', response.status)
+    }
+
+    const rejectedFiles = data.rejectedFiles ?? []
+
+    return {
+      results: data.results,
+      rejectedFiles,
+      summary: data.summary ?? {
+        total: data.results.length,
+        queued: data.results.filter((r) => r.status === 'queued').length,
+        failed: data.results.filter((r) => r.status === 'error').length,
+        rejectedFilesCount: rejectedFiles.length,
+      },
+    }
+  } catch (cause) {
+    if (cause instanceof ApiError) throw cause
+
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw new ApiError('The upload timed out. Try fewer files or a faster connection.')
+    }
+
+    throw new ApiError('Could not reach the server. Check your connection and try again.')
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
+export async function getScorecard(interviewId: string): Promise<ScorecardResponse> {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/interviews/${encodeURIComponent(interviewId)}/scorecard`,
+      { headers: { Accept: 'application/json' }, signal: controller.signal },
+    )
+
+    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+
+    const data = (await response.json()) as ScorecardResponse
+
+    if (!data.status) {
+      throw new ApiError('The server response did not include a status.', 502)
+    }
+
+    return data
+  } catch (cause) {
+    if (cause instanceof ApiError) throw cause
+
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw new ApiError('The request timed out. Check your connection and try again.')
+    }
+
+    throw new ApiError('Could not reach the server. Check your connection and try again.')
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
+export async function getDiscrepancies(interviewId: string): Promise<DiscrepancyResponse> {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/interviews/${encodeURIComponent(interviewId)}/discrepancies`,
+      {
+        headers: { Accept: 'application/json' },
+        signal: controller.signal,
+      },
+    )
+
+    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+
+    return (await response.json()) as DiscrepancyResponse
+  } catch (cause) {
+    if (cause instanceof ApiError) throw cause
+
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw new ApiError('The request timed out. Check your connection and try again.')
+    }
+
+    throw new ApiError('Could not reach the server. Check your connection and try again.')
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
+export async function updateDiscrepancyStatus(
+  id: string,
+  status: Exclude<DiscrepancyStatus, 'pending'>,
+  reviewerNotes?: string,
+): Promise<void> {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/discrepancies/${encodeURIComponent(id)}`,
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          status,
+          ...(reviewerNotes?.trim() ? { reviewerNotes: reviewerNotes.trim() } : {}),
+        }),
+        signal: controller.signal,
+      },
+    )
+
+    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+  } catch (cause) {
+    if (cause instanceof ApiError) throw cause
+
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw new ApiError('The request timed out. Check your connection and try again.')
+    }
+
+    throw new ApiError('Could not reach the server. Check your connection and try again.')
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
+export async function forceEvaluation(interviewId: string): Promise<{ interviewId: string; status: string }> {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/interviews/${encodeURIComponent(interviewId)}/force-evaluate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+    })
+
+    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+
+    return (await response.json()) as { interviewId: string; status: string }
+  } catch (cause) {
+    if (cause instanceof ApiError) throw cause
+
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw new ApiError('The request timed out. Check your connection and try again.')
+    }
+
+    throw new ApiError('Could not reach the server. Check your connection and try again.')
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
+export async function rejectInterview(interviewId: string): Promise<{ interviewId: string; status: string }> {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/interviews/${encodeURIComponent(interviewId)}/reject`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+    })
+
+    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+
+    return (await response.json()) as { interviewId: string; status: string }
+  } catch (cause) {
+    if (cause instanceof ApiError) throw cause
+
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw new ApiError('The request timed out. Check your connection and try again.')
+    }
+
+    throw new ApiError('Could not reach the server. Check your connection and try again.')
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
+// ============================================================
+// Roadmap API
+// ============================================================
+export async function getRoadmap(interviewId: string): Promise<RoadmapResponse> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/interviews/${encodeURIComponent(interviewId)}/roadmap`,
+      { headers: { Accept: 'application/json' }, signal: controller.signal },
+    );
+
+    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status);
+
+    return (await response.json()) as RoadmapResponse;
+  } catch (cause) {
+    if (cause instanceof ApiError) throw cause;
+
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw new ApiError('The request timed out. Check your connection and try again.');
+    }
+
+    throw new ApiError('Could not reach the server. Check your connection and try again.');
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+export function validateRoadmapForExport(data: RoadmapResponse | null | undefined): asserts data is RoadmapResponse {
+  if (!data) {
+    throw new ApiError(
+      'No roadmap data available. Please wait for the analysis to finish, then try again.',
+    );
+  }
+
+  if (!Array.isArray(data.gaps) || !Array.isArray(data.roadmap)) {
+    throw new ApiError(
+      'The roadmap response is malformed. Please reload the page and try again.',
+    );
+  }
+
+  if (data.gaps.length === 0 && data.roadmap.length === 0) {
+    throw new ApiError(
+      'There is nothing to export yet. This candidate has no skill gaps — the roadmap is empty.',
+    );
+  }
+
+  if (data.roadmap.length !== data.gaps.length) {
+    throw new ApiError(
+      'The roadmap is inconsistent (weeks count does not match gaps). Please reload and try again.',
+    );
+  }
+
+  for (const item of data.roadmap) {
+    if (!item.week || !item.task || !item.skillName) {
+      throw new ApiError(
+        'The roadmap contains incomplete items. Please reload and try again.',
+      );
+    }
+  }
+}
+
+// ============================================================
+// SPK Export API
+// ============================================================
+export async function getSpkExport(interviewId: string): Promise<SpkExport> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/interviews/${encodeURIComponent(interviewId)}/spk-export`,
+      { headers: { Accept: 'application/json' }, signal: controller.signal },
+    );
+
+    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status);
+
+    return (await response.json()) as SpkExport;
+  } catch (cause) {
+    if (cause instanceof ApiError) throw cause;
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw new ApiError('The request timed out. Check your connection and try again.');
+    }
+    throw new ApiError('Could not reach the server. Check your connection and try again.');
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+export async function rebuildSpkProfile(
+  interviewId: string,
+): Promise<{ interviewId: string; status: string }> {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), 10_000)
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/interviews/${encodeURIComponent(interviewId)}/spk-rebuild`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+      },
+    )
+
+    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+
+    return (await response.json()) as { interviewId: string; status: string }
+  } catch (cause) {
+    if (cause instanceof ApiError) throw cause
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw new ApiError('The request timed out. Check your connection and try again.')
+    }
+    throw new ApiError('Could not reach the server. Check your connection and try again.')
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
+// ============================================================
+// Compare API
+// ============================================================
+
+export async function getCompletedInterviews(): Promise<InterviewListResponse> {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/interviews`, {
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    })
+
+    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+
+    return (await response.json()) as InterviewListResponse
+  } catch (cause) {
+    if (cause instanceof ApiError) throw cause
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw new ApiError('The request timed out. Check your connection and try again.')
+    }
+    throw new ApiError('Could not reach the server. Check your connection and try again.')
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
+export async function compareCandidates(
+  interviewIds: string[],
+  targetRole?: string,
+): Promise<{ id: string; result: ComparisonResult }> {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), 120_000)
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/interviews/compare`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        interviewIds,
+        ...(targetRole ? { targetRole } : {}),
+      }),
+      signal: controller.signal,
+    })
+
+    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+
+    return (await response.json()) as { id: string; result: ComparisonResult }
+  } catch (cause) {
+    if (cause instanceof ApiError) throw cause
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw new ApiError('The comparison timed out. Try again with fewer candidates.')
+    }
+    throw new ApiError('Could not reach the server. Check your connection and try again.')
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
+export async function getComparison(id: string): Promise<ComparisonDetailResponse> {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/interviews/compare/${encodeURIComponent(id)}`,
+      { headers: { Accept: 'application/json' }, signal: controller.signal },
+    )
+
+    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+
+    return (await response.json()) as ComparisonDetailResponse
+  } catch (cause) {
+    if (cause instanceof ApiError) throw cause
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw new ApiError('The request timed out. Check your connection and try again.')
+    }
+    throw new ApiError('Could not reach the server. Check your connection and try again.')
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
+// ============================================================
+// Analytics API
+// ============================================================
+
+export async function getAnalyticsSummary(
+  range: AnalyticsRange = '30d',
+): Promise<AnalyticsSummary> {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/analytics/summary?range=${encodeURIComponent(range)}`,
+      { headers: { Accept: 'application/json' }, signal: controller.signal },
+    )
+
+    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+
+    return (await response.json()) as AnalyticsSummary
+  } catch (cause) {
+    if (cause instanceof ApiError) throw cause
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw new ApiError('The request timed out. Check your connection and try again.')
+    }
+    throw new ApiError('Could not reach the server. Check your connection and try again.')
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
+export async function getAnalyticsDetails(
+  type: AnalyticsDetailType,
+  range: AnalyticsRange = '30d',
+  status?: string,
+): Promise<AnalyticsDetailResponse> {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+
+  try {
+    const params = new URLSearchParams({ type, range })
+    if (status) params.set('status', status)
+
+    const response = await fetch(
+      `${API_BASE_URL}/analytics/details?${params.toString()}`,
+      { headers: { Accept: 'application/json' }, signal: controller.signal },
+    )
+
+    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+
+    return (await response.json()) as AnalyticsDetailResponse
+  } catch (cause) {
+    if (cause instanceof ApiError) throw cause
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw new ApiError('The request timed out. Check your connection and try again.')
+    }
     throw new ApiError('Could not reach the server. Check your connection and try again.')
   } finally {
     window.clearTimeout(timeout)

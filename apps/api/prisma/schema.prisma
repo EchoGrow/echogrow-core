@@ -1,7 +1,310 @@
 generator client {
-  provider = "prisma-client-js"
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+model Candidate {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  interviewSessions InterviewSession[]
+
+  @@map("candidates")
+}
+
+enum InterviewStatus {
+  QUEUED
+  PROCESSING
+  SCORED
+  FLAGGED
+  NEEDS_REVIEW
+  COMPLETED
+  FAILED
+  REJECTED 
+
+  @@map("interview_status")
+}
+
+model InterviewSession {
+  id                   String          @id @default(cuid())
+  candidateId          String          @map("candidate_id")
+  transcript           String          @db.Text
+  transcriptHash       String          @map("transcript_hash") @db.VarChar(64)
+  resume               String          @db.Text
+  resumeHash           String          @map("resume_hash") @db.VarChar(64)
+  structuredTranscript Json?           @map("structured_transcript") @db.JsonB
+  status               InterviewStatus @default(QUEUED)
+
+  isScored             Boolean         @default(false) @map("is_scored")
+  isVerified           Boolean         @default(false) @map("is_verified")
+  isPlanned            Boolean         @default(false) @map("is_planned")
+
+  manualReviewMinutes  Float?          @map("manual_review_minutes")
+  echoGrowSeconds      Int?            @map("echogrow_seconds")
+  savedMinutes         Float?          @map("saved_minutes")
+  completedAt          DateTime?       @map("completed_at")
+
+  createdAt            DateTime        @default(now()) @map("created_at")
+  updatedAt            DateTime        @updatedAt @map("updated_at")
+
+  // Tracks when the CURRENT processing attempt started.
+  // Reset to `now()` on every pipeline run (including manual retries),
+  // so processing time = completedAt - processingStartedAt (accurate, no outliers).
+  // Falls back to createdAt for legacy rows that predate this field.
+  processingStartedAt  DateTime        @map("processing_started_at")
+  processingAttempts   Int             @default(0) @map("processing_attempts")
+
+  // SPK build status
+  spkStatus            String?         @map("spk_status")   // 'pending' | 'building' | 'ready' | 'failed'
+  spkError             String?         @map("spk_error")    @db.Text
+
+  candidate Candidate  @relation(fields: [candidateId], references: [id], onDelete: Restrict)
+  scorecard Scorecard?
+  spkProfile SpkProfile?
+
+  comparisonInterviews ComparisonInterview[]
+  comparisonRankings   ComparisonRanking[]
+
+  @@index([candidateId])
+  @@index([transcriptHash])
+  @@index([resumeHash])
+  @@map("interview_sessions")
+}
+
+enum ScorecardStatus {
+  PENDING_REVIEW
+  APPROVED
+
+  @@map("scorecard_status")
+}
+
+model Scorecard {
+  id           String          @id @default(cuid())
+  interviewId  String          @unique @map("interview_id")
+  overallScore Float?          @map("overall_score")
+  confidence   Float?
+  status       ScorecardStatus @default(PENDING_REVIEW)
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+
+  interview     InterviewSession @relation(fields: [interviewId], references: [id], onDelete: Restrict)
+  dimensions    Dimension[]
+  discrepancies Discrepancy[]
+
+  roadmap Roadmap?
+
+  @@map("scorecards")
+}
+
+enum DimensionType {
+  TECHNICAL_DEPTH
+  COMMUNICATION
+  DOMAIN_EXPERIENCE
+  PROBLEM_SOLVING
+
+  @@map("dimension_type")
+}
+
+model Dimension {
+  id            String        @id @default(cuid())
+  scorecardId   String        @map("scorecard_id")
+  dimensionType DimensionType @map("dimension_type")
+  score         Int
+  reason        String?       @db.Text
+  evidenceQuote Json?         @map("evidence_quote") @db.JsonB
+  createdAt     DateTime      @default(now()) @map("created_at")
+
+  scorecard Scorecard  @relation(fields: [scorecardId], references: [id], onDelete: Cascade)
+  skillGaps SkillGap[]
+
+  @@unique([scorecardId, dimensionType])
+  @@index([scorecardId])
+  @@map("dimensions")
+}
+
+enum DiscrepancyStatus {
+  PENDING
+  CONFIRMED
+  DISMISSED
+
+  @@map("discrepancy_status")
+}
+
+enum DiscrepancySeverity {
+  LOW
+  MEDIUM
+  HIGH
+
+  @@map("discrepancy_severity")
+}
+
+model Discrepancy {
+  id             String              @id @default(cuid())
+  scorecardId    String              @map("scorecard_id")
+  claim          String              @db.Text
+  cvQuote        String?             @map("cv_quote") @db.Text
+  interviewQuote String?             @map("interview_quote") @db.Text
+  confidence     Float?
+  status         DiscrepancyStatus   @default(PENDING)
+  severity       DiscrepancySeverity @default(MEDIUM)
+  reviewerNotes  String?             @db.Text
+  reviewedAt     DateTime?           @map("reviewed_at")
+  createdAt      DateTime            @default(now()) @map("created_at")
+
+  scorecard Scorecard @relation(fields: [scorecardId], references: [id], onDelete: Cascade)
+
+  @@index([scorecardId])
+  @@map("discrepancies")
+}
+
+enum SkillGapPriority {
+  LOW
+  MEDIUM
+  HIGH
+
+  @@map("skill_gap_priority")
+}
+
+model SkillGap {
+  id          String           @id @default(cuid())
+  dimensionId String           @map("dimension_id")
+  skillName   String           @map("skill_name")
+  priority    SkillGapPriority @default(MEDIUM)
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  dimension   Dimension    @relation(fields: [dimensionId], references: [id], onDelete: Cascade)
+  roadmapItem RoadmapItem?
+
+  @@unique([dimensionId, skillName])
+  @@index([dimensionId])
+  @@map("skill_gaps")
+}
+
+model Roadmap {
+  id          String   @id @default(cuid())
+  scorecardId String   @unique @map("scorecard_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  scorecard Scorecard     @relation(fields: [scorecardId], references: [id], onDelete: Cascade)
+  items     RoadmapItem[]
+
+  @@map("roadmaps")
+}
+
+model RoadmapItem {
+  id          String   @id @default(cuid())
+  roadmapId   String   @map("roadmap_id")
+  skillGapId  String   @unique @map("skill_gap_id")
+  week        Int
+  description String   @db.Text
+  resourceUrl String?  @map("resource_url") @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  roadmap  Roadmap  @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+  skillGap SkillGap @relation(fields: [skillGapId], references: [id], onDelete: Cascade)
+
+  @@index([roadmapId])
+  @@map("roadmap_items")
+}
+
+// SpkProfile (Simera SPK export snapshot)
+model SpkProfile {
+  id          String   @id @default(cuid())
+  interviewId String   @unique @map("interview_id")
+
+  // Metadata extracted once by LLM
+  seniority         String?  @map("seniority")
+  primaryRole       String?  @map("primary_role")
+  timezone          String?  @map("timezone")
+  languages         Json?    @map("languages")           // string[]
+  yearsOfExperience Int?     @map("years_of_experience")
+
+  // Snapshot of full SPK payload (JSONB)
+  spkPayload    Json     @map("spk_payload")
+
+  // Versioning for future schema changes
+  schemaVersion String   @default("1.0.0") @map("schema_version")
+
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  interview     InterviewSession @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+
+  @@index([interviewId])
+  @@map("spk_profiles")
+}
+
+// Comparison Models
+enum ComparisonStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+
+  @@map("comparison_status")
+}
+
+model Comparison {
+  id             String             @id @default(cuid())
+  targetRole     String?            @map("target_role")
+  status         ComparisonStatus   @default(PROCESSING)
+  error          String?            @db.Text
+
+  candidateCount Int                @default(0) @map("candidate_count")
+  confidence     Float?
+  summary        String?            @db.Text
+  recommendation String?            @db.Text
+
+  result         Json?              @map("result")
+
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+  completedAt    DateTime?          @map("completed_at")
+
+  interviews     ComparisonInterview[]
+  rankings       ComparisonRanking[]
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("comparisons")
+}
+
+model ComparisonInterview {
+  id           String   @id @default(cuid())
+  comparisonId String   @map("comparison_id")
+  interviewId  String   @map("interview_id")
+  rank         Int?
+  fitScore     Float?   @map("fit_score")
+
+  comparison Comparison       @relation(fields: [comparisonId], references: [id], onDelete: Cascade)
+  interview  InterviewSession @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+
+  @@unique([comparisonId, interviewId])
+  @@index([comparisonId])
+  @@index([interviewId])
+  @@map("comparison_interviews")
+}
+
+model ComparisonRanking {
+  id           String   @id @default(cuid())
+  comparisonId String   @map("comparison_id")
+  interviewId  String   @map("interview_id")
+  rank         Int
+  reason       String   @db.Text
+  fitScore     Float?   @map("fit_score")
+
+  comparison Comparison       @relation(fields: [comparisonId], references: [id], onDelete: Cascade)
+  interview  InterviewSession @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+
+  @@unique([comparisonId, interviewId])
+  @@index([comparisonId])
+  @@map("comparison_rankings")
 }

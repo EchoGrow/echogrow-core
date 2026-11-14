@@ -3,11 +3,27 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { TestModule } from './queues/test/test.module';
-import { LlmModule } from './llm/llm.module';
+import { PrismaModule } from './modules/prisma/prisma.module';
+import { InterviewsModule } from './modules/interviews/interviews.module';
+import { LlmModule } from './modules/llm/llm.module';
+import { EvaluationModule } from './modules/evaluation/evaluation.module';
+import { DiscrepancyModule } from './modules/discrepancy/discrepancy.module';
+import { RoadmapModule } from './modules/roadmap/roadmap.module';
+import { SpkModule } from './modules/spk/spk.module';
+import { PipelineModule } from './modules/pipeline/pipeline.module';
+import { CompareModule } from './modules/compare/compare.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 
 @Module({
   imports: [
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60_000,
+        limit: process.env.NODE_ENV === 'test' ? 1000 : 10,
+      },
+    ]),
     ConfigModule.forRoot({ isGlobal: true }),
     BullModule.forRootAsync({
       inject: [ConfigService],
@@ -18,10 +34,25 @@ import { LlmModule } from './llm/llm.module';
         },
       }),
     }),
-    TestModule,
+    BullModule.registerQueue({ name: 'evaluation' }),
+    PrismaModule,
+    InterviewsModule,
     LlmModule,
+    EvaluationModule,
+    DiscrepancyModule,
+    RoadmapModule,
+    SpkModule,
+    PipelineModule,
+    CompareModule,
+    AnalyticsModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
 export class AppModule {}

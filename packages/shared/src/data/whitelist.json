@@ -1,0 +1,345 @@
+[
+  {
+    "category": "Databases",
+    "skillName": "PostgreSQL",
+    "aliases": ["Postgres", "PostgreSQL database", "PG", "PostgreSQL DB", "Postgres database"],
+    "resources": [
+      { "resourceType": "Documentation", "resourceTitle": "PostgreSQL Official Documentation", "resourceUrl": "https://www.postgresql.org/docs/current/" },
+      { "resourceType": "Tutorial", "resourceTitle": "PostgreSQL Tutorial (Official)", "resourceUrl": "https://www.postgresql.org/docs/current/tutorial.html" },
+      { "resourceType": "Deep-dive Guide", "resourceTitle": "Performance Tips", "resourceUrl": "https://www.postgresql.org/docs/current/performance-tips.html" },
+      { "resourceType": "Deep-dive Guide", "resourceTitle": "Concurrency Control and MVCC", "resourceUrl": "https://www.postgresql.org/docs/current/mvcc.html" },
+      { "resourceType": "Interactive Tutorial", "resourceTitle": "PostgreSQL Exercises", "resourceUrl": "https://pgexercises.com/" },
+      { "resourceType": "YouTube", "resourceTitle": "Hussein Nasser - Database Engineering Channel", "resourceUrl": "https://www.youtube.com/@hnasr" }
+    ]
+  },
+  {
+    "category": "Databases",
+    "skillName": "SQL Indexing and Query Optimization",
+    "aliases": [
+      "EXPLAIN", "EXPLAIN ANALYZE", "EXPLAIN execution plans",
+      "EXPLAIN ANALYZE execution plans",
+      "PostgreSQL performance tuning", "PostgreSQL query optimization",
+      "PostgreSQL query tuning", "PostgreSQL EXPLAIN execution plans",
+      "Database profiling", "Database optimization",
+      "Database query optimization", "Database performance tuning",
+      "Query optimization", "Query tuning", "Index optimization",
+      "SQL optimization", "SQL query optimization",
+      "SQL performance tuning", "B-Tree indexing",
+      "Indexing strategies", "Index tuning"
+    ],
+    "resources": [
+      { "resourceType": "Deep-dive Guide", "resourceTitle": "Use The Index, Luke", "resourceUrl": "https://use-the-index-luke.com/" },
+      { "resourceType": "Documentation", "resourceTitle": "PostgreSQL Indexes", "resourceUrl": "https://www.postgresql.org/docs/current/indexes.html" },
+      { "resourceType": "Documentation", "resourceTitle": "Using EXPLAIN", "resourceUrl": "https://www.postgresql.org/docs/current/using-explain.html" },
+      { "resourceType": "Interactive Tutorial", "resourceTitle": "SQLBolt Interactive Lessons", "resourceUrl": "https://sqlbolt.com/" },
+      { "resourceType": "Tutorial", "resourceTitle": "Mode SQL Tutorial", "resourceUrl": "https://mode.com/sql-tutorial/" },
+      { "resourceType": "YouTube", "resourceTitle": "CMU Database Group Lectures", "resourceUrl": "https://www.youtube.com/@CMUDatabaseGroup" }
+    ]
+  },
+  {
+    "category": "Databases",
+    "skillName": "Redis",
+    "aliases": ["Redis cache", "Redis locking", "Redis locks", "Redis data structures", "Redis Streams", "Redis pub/sub"],
+    "resources": [
+      { "resourceType": "Documentation", "resourceTitle": "Redis Documentation", "resourceUrl": "https://redis.io/docs/latest/" },
+      { "resourceType": "Documentation", "resourceTitle": "Redis Data Types", "resourceUrl": "https://redis.io/docs/latest/develop/data-types/" },
+      { "resourceType": "Reference", "resourceTitle": "Redis Commands Reference", "resourceUrl": "https://redis.io/docs/latest/commands/" },
+      { "resourceType": "Deep-dive Guide", "resourceTitle": "Redis Persistence", "resourceUrl": "https://redis.io/docs/latest/operate/oss_and_stack/management/persistence/" },
+      { "resourceType": "Tutorial", "resourceTitle": "Redis University", "resourceUrl": "https://university.redis.io/" }
+    ]
+  },
+  {
+    "category": "Databases",
+    "skillName": "MongoDB",
+    "aliases": ["Mongo", "MongoDB Atlas", "NoSQL MongoDB"],
+    "resources": [
+      { "resourceType": "Documentation", "resourceTitle": "MongoDB Manual", "resourceUrl": "https://www.mongodb.com/docs/manual/" },
+      { "resourceType": "Tutorial", "resourceTitle": "MongoDB University", "resourceUrl": "https://learn.mongodb.com/" }
+    ]
+  },
+  {
+    "category": "Databases",
+    "skillName": "Prisma ORM",
+    "aliases": ["Prisma", "Prisma Client", "Prisma schema", "Prisma migrations"],
+    "resources": [
+      { "resourceType": "Documentation", "resourceTitle": "Prisma Documentation", "resourceUrl": "https://www.prisma.io/docs" },
+      { "resourceType": "Tutorial", "resourceTitle": "Prisma Getting Started", "resourceUrl": "https://www.prisma.io/docs/getting-started" }
+    ]
+  },
+  {
+    "category": "System Design",
+    "skillName": "System Design Fundamentals",
+    "aliases": ["System design", "Distributed system design", "Scalable systems", "Software architecture", "High-level design"],
+    "resources": [
+      { "resourceType": "Deep-dive Guide", "resourceTitle": "System Design Primer", "resourceUrl": "https://github.com/donnemartin/system-design-primer" },
+      { "resourceType": "Deep-dive Guide", "resourceTitle": "ByteByteGo System Design 101", "resourceUrl": "https://github.com/ByteByteGoHq/system-design-101" },
+      { "resourceType": "Deep-dive Guide", "resourceTitle": "Google SRE Book", "resourceUrl": "https://sre.google/sre-book/table-of-contents/" }
+    ]
+  },
+  {
+    "category": "Distributed Systems",
+    "skillName": "Consensus and Distributed Systems",
+    "aliases": ["Raft", "Paxos", "Distributed consensus", "Distributed systems", "Consistency models"],
+    "resources": [
+      { "resourceType": "Tutorial", "resourceTitle": "MIT 6.824 Distributed Systems Course", "resourceUrl": "https://pdos.csail.mit.edu/6.824/" },
+      { "resourceType": "Deep-dive Guide", "resourceTitle": "The Raft Consensus Algorithm", "resourceUrl": "https://raft.github.io/" },
+      { "resourceType": "Deep-dive Guide", "resourceTitle": "Designing Data-Intensive Applications", "resourceUrl": "https://dataintensive.net/" }
+    ]
+  },
+  {
+    "category": "DevOps",
+    "skillName": "Docker",
+    "aliases": ["Dockerfile", "Docker Compose", "Docker Swarm", "Containerization", "Container management", "Containers", "Docker containers"],
+    "resources": [
+      { "resourceType": "Documentation", "resourceTitle": "Docker Documentation", "resourceUrl": "https://docs.docker.com/" },
+      { "resourceType": "Tutorial", "resourceTitle": "Docker Get Started", "resourceUrl": "https://docs.docker.com/get-started/" },
+      { "resourceType": "Deep-dive Guide", "resourceTitle": "Dockerfile Best Practices", "resourceUrl": "https://docs.docker.com/build/building/best-practices/" }
+    ]
+  },
+  {
+    "category": "DevOps",
+    "skillName": "Kubernetes",
+    "aliases": ["K8s", "Kubernetes cluster", "Kubernetes operator", "Kubernetes deployment"],
+    "resources": [
+      { "resourceType": "Documentation", "resourceTitle": "Kubernetes Documentation", "resourceUrl": "https://kubernetes.io/docs/home/" },
+      { "resourceType": "Tutorial", "resourceTitle": "Learn Kubernetes Basics", "resourceUrl": "https://kubernetes.io/docs/tutorials/kubernetes-basics/" },
+      { "resourceType": "Deep-dive Guide", "resourceTitle": "Kubernetes The Hard Way", "resourceUrl": "https://github.com/kelseyhightower/kubernetes-the-hard-way" }
+    ]
+  },
+  {
+    "category": "DevOps",
+    "skillName": "Terraform and Infrastructure as Code",
+    "aliases": ["Terraform", "IaC", "Infrastructure as Code", "Pulumi"],
+    "resources": [
+      { "resourceType": "Documentation", "resourceTitle": "Terraform Documentation", "resourceUrl": "https://developer.hashicorp.com/terraform/docs" },
+      { "resourceType": "Tutorial", "resourceTitle": "HashiCorp Terraform Tutorials", "resourceUrl": "https://developer.hashicorp.com/terraform/tutorials" }
+    ]
+  },
+  {
+    "category": "DevOps",
+    "skillName": "CI/CD with GitHub Actions",
+    "aliases": ["CI/CD", "GitHub Actions", "Continuous integration", "Continuous deployment", "Pipelines"],
+    "resources": [
+      { "resourceType": "Documentation", "resourceTitle": "GitHub Actions Documentation", "resourceUrl": "https://docs.github.com/en/actions" },
+      { "resourceType": "Documentation", "resourceTitle": "Writing Workflows", "resourceUrl": "https://docs.github.com/en/actions/writing-workflows" }
+    ]
+  },
+  {
+    "category": "Linux",
+    "skillName": "Linux Administration",
+    "aliases": ["Linux", "Bash", "Linux commands", "Shell scripting", "Unix"],
+    "resources": [
+      { "resourceType": "Documentation", "resourceTitle": "Linux man pages", "resourceUrl": "https://man7.org/linux/man-pages/" },
+      { "resourceType": "Deep-dive Guide", "resourceTitle": "Advanced Bash-Scripting Guide", "resourceUrl": "https://tldp.org/LDP/abs/html/" }
+    ]
+  },
+  {
+    "category": "Networking",
+    "skillName": "TCP/IP and HTTP",
+    "aliases": ["TCP/IP", "HTTP", "Networking", "Network protocols", "HTTPS"],
+    "resources": [
+      { "resourceType": "Documentation", "resourceTitle": "MDN HTTP Documentation", "resourceUrl": "https://developer.mozilla.org/en-US/docs/Web/HTTP" },
+      { "resourceType": "Reference", "resourceTitle": "RFC 9110 - HTTP Semantics", "resourceUrl": "https://www.rfc-editor.org/rfc/rfc9110" }
+    ]
+  },
+  {
+    "category": "Networking",
+    "skillName": "DNS",
+    "aliases": ["DNS configuration", "DNS resolution", "Domain names", "DNSSEC"],
+    "resources": [
+      { "resourceType": "Interactive Tutorial", "resourceTitle": "How DNS Works (comic)", "resourceUrl": "https://howdns.works/" },
+      { "resourceType": "Reference", "resourceTitle": "RFC 1035 - Domain Names Implementation", "resourceUrl": "https://www.rfc-editor.org/rfc/rfc1035" }
+    ]
+  },
+  {
+    "category": "Security",
+    "skillName": "Web Application Security",
+    "aliases": ["OWASP", "Web security", "Application security", "XSS", "SQL injection", "CSRF"],
+    "resources": [
+      { "resourceType": "Documentation", "resourceTitle": "OWASP Top Ten", "resourceUrl": "https://owasp.org/www-project-top-ten/" },
+      { "resourceType": "Reference", "resourceTitle": "OWASP Cheat Sheet Series", "resourceUrl": "https://cheatsheetseries.owasp.org/" }
+    ]
+  },
+  {
+    "category": "Cryptography",
+    "skillName": "Applied Cryptography",
+    "aliases": ["Cryptography", "Encryption", "Hashing", "AES", "RSA", "Symmetric encryption"],
+    "resources": [
+      { "resourceType": "Interactive Tutorial", "resourceTitle": "Cryptopals Crypto Challenges", "resourceUrl": "https://cryptopals.com/" },
+      { "resourceType": "Deep-dive Guide", "resourceTitle": "Crypto 101", "resourceUrl": "https://www.crypto101.io/" }
+    ]
+  },
+  {
+    "category": "Security",
+    "skillName": "TLS and PKI",
+    "aliases": ["TLS", "SSL", "PKI", "Certificates", "HTTPS certificates", "mTLS"],
+    "resources": [
+      { "resourceType": "Interactive Tutorial", "resourceTitle": "The Illustrated TLS 1.3 Connection", "resourceUrl": "https://tls13.xargs.org/" },
+      { "resourceType": "Documentation", "resourceTitle": "Let's Encrypt Documentation", "resourceUrl": "https://letsencrypt.org/docs/" }
+    ]
+  },
+  {
+    "category": "Security",
+    "skillName": "Authentication and OAuth 2.0 / OIDC",
+    "aliases": ["OAuth", "OAuth 2.0", "OIDC", "JWT", "Authentication", "Authorization", "SSO"],
+    "resources": [
+      { "resourceType": "Documentation", "resourceTitle": "OAuth 2.0 Overview", "resourceUrl": "https://oauth.net/2/" },
+      { "resourceType": "Documentation", "resourceTitle": "How OpenID Connect Works", "resourceUrl": "https://openid.net/developers/how-connect-works/" },
+      { "resourceType": "Tutorial", "resourceTitle": "Introduction to JSON Web Tokens", "resourceUrl": "https://jwt.io/introduction" }
+    ]
+  },
+  {
+    "category": "Backend",
+    "skillName": "REST API Design",
+    "aliases": ["REST", "RESTful API", "API design", "HTTP API", "OpenAPI", "Swagger"],
+    "resources": [
+      { "resourceType": "Tutorial", "resourceTitle": "RESTful API Tutorial", "resourceUrl": "https://restfulapi.net/" },
+      { "resourceType": "Documentation", "resourceTitle": "OpenAPI Specification", "resourceUrl": "https://swagger.io/specification/" }
+    ]
+  },
+  {
+    "category": "Backend",
+    "skillName": "GraphQL",
+    "aliases": ["GraphQL API", "GraphQL schema", "Apollo GraphQL", "GraphQL resolvers", "GraphQL queries"],
+    "resources": [
+      { "resourceType": "Documentation", "resourceTitle": "GraphQL Learn", "resourceUrl": "https://graphql.org/learn/" },
+      { "resourceType": "Reference", "resourceTitle": "GraphQL Specification", "resourceUrl": "https://spec.graphql.org/" },
+      { "resourceType": "Tutorial", "resourceTitle": "How to GraphQL", "resourceUrl": "https://www.howtographql.com/" }
+    ]
+  },
+  {
+    "category": "Backend",
+    "skillName": "Node.js",
+    "aliases": ["Node", "NodeJS", "Express", "NestJS", "Node.js runtime"],
+    "resources": [
+      { "resourceType": "Documentation", "resourceTitle": "Node.js API Documentation", "resourceUrl": "https://nodejs.org/docs/latest/api/" },
+      { "resourceType": "Tutorial", "resourceTitle": "Learn Node.js", "resourceUrl": "https://nodejs.org/en/learn" }
+    ]
+  },
+  {
+    "category": "Backend",
+    "skillName": "Go",
+    "aliases": ["Golang", "Go language", "Go concurrency", "Go modules"],
+    "resources": [
+      { "resourceType": "Documentation", "resourceTitle": "Go Documentation", "resourceUrl": "https://go.dev/doc/" },
+      { "resourceType": "Interactive Tutorial", "resourceTitle": "A Tour of Go", "resourceUrl": "https://go.dev/tour/" }
+    ]
+  },
+  {
+    "category": "Backend",
+    "skillName": "Rust",
+    "aliases": ["Rust language", "Rust concurrency", "Tokio", "Async Rust"],
+    "resources": [
+      { "resourceType": "Documentation", "resourceTitle": "The Rust Programming Language Book", "resourceUrl": "https://doc.rust-lang.org/book/" },
+      { "resourceType": "Tutorial", "resourceTitle": "Rust by Example", "resourceUrl": "https://doc.rust-lang.org/rust-by-example/" }
+    ]
+  },
+  {
+    "category": "Frontend",
+    "skillName": "TypeScript and Modern JavaScript",
+    "aliases": ["TypeScript", "JavaScript", "ES6", "Modern JS", "TS", "JS"],
+    "resources": [
+      { "resourceType": "Documentation", "resourceTitle": "MDN JavaScript Guide", "resourceUrl": "https://developer.mozilla.org/en-US/docs/Web/JavaScript" },
+      { "resourceType": "Documentation", "resourceTitle": "TypeScript Documentation", "resourceUrl": "https://www.typescriptlang.org/docs/" }
+    ]
+  },
+  {
+    "category": "Frontend",
+    "skillName": "React",
+    "aliases": ["React.js", "ReactJS", "React hooks", "useEffect", "Next.js", "React components"],
+    "resources": [
+      { "resourceType": "Documentation", "resourceTitle": "React Learn", "resourceUrl": "https://react.dev/learn" },
+      { "resourceType": "Deep-dive Guide", "resourceTitle": "Escape Hatches", "resourceUrl": "https://react.dev/learn/escape-hatches" }
+    ]
+  },
+  {
+    "category": "Frontend",
+    "skillName": "CSS Layout and Responsive Design",
+    "aliases": ["CSS", "Flexbox", "CSS Grid", "Responsive design", "Tailwind CSS", "Tailwind"],
+    "resources": [
+      { "resourceType": "Documentation", "resourceTitle": "MDN CSS Documentation", "resourceUrl": "https://developer.mozilla.org/en-US/docs/Web/CSS" },
+      { "resourceType": "Tutorial", "resourceTitle": "web.dev Learn CSS", "resourceUrl": "https://web.dev/learn/css" }
+    ]
+  },
+  {
+    "category": "AI/RAG",
+    "skillName": "Retrieval-Augmented Generation (RAG)",
+    "aliases": ["RAG", "Retrieval augmented generation", "Vector search", "Semantic search", "RAG pipeline"],
+    "resources": [
+      { "resourceType": "Tutorial", "resourceTitle": "LangChain RAG Tutorial", "resourceUrl": "https://python.langchain.com/docs/tutorials/rag/" },
+      { "resourceType": "Documentation", "resourceTitle": "LlamaIndex Documentation", "resourceUrl": "https://docs.llamaindex.ai/en/stable/" }
+    ]
+  },
+  {
+    "category": "AI/RAG",
+    "skillName": "Vector Databases and Embeddings",
+    "aliases": ["Vector database", "Embeddings", "pgvector", "Qdrant", "Pinecone", "FAISS", "Semantic embeddings"],
+    "resources": [
+      { "resourceType": "Documentation", "resourceTitle": "pgvector", "resourceUrl": "https://github.com/pgvector/pgvector" },
+      { "resourceType": "Documentation", "resourceTitle": "Qdrant Documentation", "resourceUrl": "https://qdrant.tech/documentation/" }
+    ]
+  },
+  {
+    "category": "AI/RAG",
+    "skillName": "LLMs and Transformers",
+    "aliases": ["LLM", "Transformers", "GPT", "Attention mechanism", "Prompt engineering", "Fine-tuning"],
+    "resources": [
+      { "resourceType": "Deep-dive Guide", "resourceTitle": "Attention Is All You Need", "resourceUrl": "https://arxiv.org/abs/1706.03762" },
+      { "resourceType": "Tutorial", "resourceTitle": "Hugging Face LLM Course", "resourceUrl": "https://huggingface.co/learn/llm-course" }
+    ]
+  },
+  {
+    "category": "AI/RAG",
+    "skillName": "Machine Learning and Deep Learning",
+    "aliases": ["Machine learning", "Deep learning", "ML", "DL", "Neural networks", "PyTorch", "TensorFlow"],
+    "resources": [
+      { "resourceType": "Tutorial", "resourceTitle": "Practical Deep Learning (fast.ai)", "resourceUrl": "https://course.fast.ai/" },
+      { "resourceType": "Documentation", "resourceTitle": "PyTorch Tutorials", "resourceUrl": "https://pytorch.org/tutorials/" }
+    ]
+  },
+  {
+    "category": "Distributed Systems",
+    "skillName": "Apache Kafka and Messaging",
+    "aliases": ["Kafka", "Apache Kafka", "Message queue", "RabbitMQ", "Pub/Sub", "Event streaming"],
+    "resources": [
+      { "resourceType": "Documentation", "resourceTitle": "Apache Kafka Documentation", "resourceUrl": "https://kafka.apache.org/documentation/" },
+      { "resourceType": "Tutorial", "resourceTitle": "Confluent Developer", "resourceUrl": "https://developer.confluent.io/" }
+    ]
+  },
+  {
+    "category": "System Design",
+    "skillName": "Microservices Architecture",
+    "aliases": ["Microservices", "Service mesh", "API gateway", "Event-driven architecture", "Domain-driven design"],
+    "resources": [
+      { "resourceType": "Reference", "resourceTitle": "Microservices.io Patterns", "resourceUrl": "https://microservices.io/patterns/" },
+      { "resourceType": "Deep-dive Guide", "resourceTitle": "Microservices (Martin Fowler)", "resourceUrl": "https://martinfowler.com/articles/microservices.html" }
+    ]
+  },
+  {
+    "category": "DevOps",
+    "skillName": "Observability and Monitoring",
+    "aliases": ["Observability", "Monitoring", "Prometheus", "Grafana", "OpenTelemetry", "Logging", "Tracing"],
+    "resources": [
+      { "resourceType": "Documentation", "resourceTitle": "Prometheus Documentation", "resourceUrl": "https://prometheus.io/docs/" },
+      { "resourceType": "Documentation", "resourceTitle": "Grafana Documentation", "resourceUrl": "https://grafana.com/docs/" }
+    ]
+  },
+  {
+    "category": "Cloud",
+    "skillName": "AWS Core Services and IAM",
+    "aliases": ["AWS", "Amazon Web Services", "IAM", "S3", "EC2", "Lambda", "AWS services"],
+    "resources": [
+      { "resourceType": "Documentation", "resourceTitle": "AWS Documentation", "resourceUrl": "https://docs.aws.amazon.com/" },
+      { "resourceType": "Tutorial", "resourceTitle": "AWS Getting Started", "resourceUrl": "https://aws.amazon.com/getting-started/" }
+    ]
+  },
+  {
+    "category": "Tooling",
+    "skillName": "Git and Version Control",
+    "aliases": ["Git", "GitHub", "GitLab", "Version control", "Git workflows", "Branching strategies"],
+    "resources": [
+      { "resourceType": "Documentation", "resourceTitle": "Git Documentation", "resourceUrl": "https://git-scm.com/doc" },
+      { "resourceType": "Interactive Tutorial", "resourceTitle": "Learn Git Branching", "resourceUrl": "https://learngitbranching.js.org/" }
+    ]
+  }
+]
