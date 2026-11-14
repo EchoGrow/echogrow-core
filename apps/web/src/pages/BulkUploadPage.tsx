@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import {
   AlertTriangle,
   ArrowRight,
+  BarChart3,
   CheckCircle2,
   Download,
   ExternalLink,
@@ -54,12 +55,8 @@ import {
 import { cn } from '../lib/cn'
 import { fadeUp, staggerContainer } from '../lib/animations'
 
-/* ------------------------------------------------------------------ */
-/* Constants                                                           */
-/* ------------------------------------------------------------------ */
-
 const POLL_INTERVAL_MS = 3_000
-const MAX_POLL_MS = 20 * 60 * 1000 // 20 minutes
+const MAX_POLL_MS = 20 * 60 * 1000
 
 interface RowState {
   status: RowStatus
@@ -125,10 +122,6 @@ function progressColor(status: RowStatus): string {
   }
 }
 
-/* ------------------------------------------------------------------ */
-/* Steps                                                               */
-/* ------------------------------------------------------------------ */
-
 const STEPS = [
   {
     id: 1,
@@ -149,10 +142,6 @@ const STEPS = [
     desc: 'Queued candidates move to scored or needs-review, and every row links to its dashboard.',
   },
 ]
-
-/* ------------------------------------------------------------------ */
-/* Helper Components                                                   */
-/* ------------------------------------------------------------------ */
 
 const inputBase =
   'w-full rounded-lg border bg-surface-card px-3 py-2 text-sm text-fg transition-all focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-offset-2 focus:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-60'
@@ -206,10 +195,6 @@ function SummaryStat({ label, value, tone }: { label: string; value: number; ton
   )
 }
 
-/* ------------------------------------------------------------------ */
-/* Main Component                                                      */
-/* ------------------------------------------------------------------ */
-
 export function BulkUploadPage() {
   const [files, setFiles] = useState<PickedFile[]>([])
   const [rows, setRows] = useState<CandidateDraft[]>([])
@@ -225,7 +210,6 @@ export function BulkUploadPage() {
 
   const rowStateRef = useRef<Record<string, RowState>>({})
 
-  // Load saved results from localStorage only if not a fresh tab
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const isFresh = params.get('fresh') === '1'
@@ -268,7 +252,6 @@ export function BulkUploadPage() {
     }
   }, [])
 
-  // Save results to localStorage when they change
   useEffect(() => {
     if (response && response.results.length > 0) {
       localStorage.setItem('echogrow_bulk_results', JSON.stringify(response))
@@ -329,10 +312,6 @@ export function BulkUploadPage() {
     issueCount === 0 &&
     !submitting &&
     response === null
-
-  /* ------------------------------------------------------------------ */
-  /* Polling                                                             */
-  /* ------------------------------------------------------------------ */
 
   useEffect(() => {
     if (!polling) return
@@ -414,10 +393,6 @@ export function BulkUploadPage() {
       window.clearInterval(timer)
     }
   }, [polling])
-
-  /* ------------------------------------------------------------------ */
-  /* File Handling                                                       */
-  /* ------------------------------------------------------------------ */
 
   const handleFiles = async (incoming: File[]) => {
     if (busy) {
@@ -634,10 +609,6 @@ export function BulkUploadPage() {
     event.target.value = ''
   }
 
-  /* ------------------------------------------------------------------ */
-  /* Export Handlers                                                     */
-  /* ------------------------------------------------------------------ */
-
   const getMergedResults = () => {
     if (!response) return []
     return rows.map((row) => {
@@ -686,10 +657,6 @@ export function BulkUploadPage() {
       })
     }
   }
-
-  /* ------------------------------------------------------------------ */
-  /* Submit                                                              */
-  /* ------------------------------------------------------------------ */
 
   const handleSubmit = async () => {
     if (!canSubmit) return
@@ -795,10 +762,6 @@ export function BulkUploadPage() {
     }
   }
 
-  /* ------------------------------------------------------------------ */
-  /* Render                                                              */
-  /* ------------------------------------------------------------------ */
-
   return (
     <>
       <SEO
@@ -808,7 +771,6 @@ export function BulkUploadPage() {
       />
 
       <div className="flex min-h-svh flex-col bg-surface">
-        {/* Header */}
         <header className="sticky top-0 z-20 border-b border-line bg-surface-glass backdrop-blur">
           <div className="container-custom flex h-16 items-center justify-between gap-4">
             <Logo size="sm" />
@@ -817,6 +779,12 @@ export function BulkUploadPage() {
                 <Button variant="ghost" size="sm">
                   <GitCompare className="mr-2 h-4 w-4" />
                   <span className="hidden sm:inline">Compare</span>
+                </Button>
+              </Link>
+              <Link to="/analytics">
+                <Button variant="ghost" size="sm">
+                  <BarChart3 className="mr-2 h-4 w-4" />
+                  <span className="hidden sm:inline">Analytics</span>
                 </Button>
               </Link>
               <Link to="/upload">
@@ -836,7 +804,6 @@ export function BulkUploadPage() {
           animate="visible"
           className="container-custom w-full flex-1 py-10 lg:py-14"
         >
-          {/* Hero Section */}
           <motion.div variants={fadeUp} className="text-center">
             <span className="inline-flex items-center gap-2 rounded-full border border-line bg-chip px-3 py-1 text-xs font-medium text-fg-muted">
               <span className="h-1.5 w-1.5 rounded-full bg-accent-500 animate-pulse-glow" />
@@ -852,7 +819,6 @@ export function BulkUploadPage() {
             </p>
           </motion.div>
 
-          {/* Steps Timeline */}
           <motion.div variants={fadeUp} className="mt-12 grid gap-8 sm:grid-cols-3">
             {STEPS.map((step, index) => (
               <div key={step.id} className="relative flex flex-col items-center text-center">
@@ -876,7 +842,6 @@ export function BulkUploadPage() {
           </motion.div>
 
           <div className="mt-12 space-y-6">
-            {/* Input Card */}
             <motion.div variants={fadeUp}>
               <Card className="overflow-hidden border-accent-500/20 shadow-lg">
                 <div className="border-b border-line bg-gradient-to-r from-accent-50/50 to-surface-card px-6 py-4 dark:from-accent-500/5">
@@ -973,7 +938,6 @@ export function BulkUploadPage() {
               </Card>
             </motion.div>
 
-            {/* Orphans Warning */}
             {orphans.length > 0 && (
               <motion.div variants={fadeUp}>
                 <div className="rounded-xl border border-warning-500/30 bg-warning-50 px-4 py-3 text-sm text-warning-700 dark:bg-warning-500/10 dark:text-warning-500">
@@ -1008,7 +972,6 @@ export function BulkUploadPage() {
               </motion.div>
             )}
 
-            {/* Rejected Files Banner */}
             {rejectedFiles.length > 0 && (
               <motion.div variants={fadeUp}>
                 <div className="rounded-xl border border-danger-500/30 bg-danger-50 px-4 py-3 text-sm text-danger-700 dark:bg-danger-500/10 dark:text-danger-500">
@@ -1036,7 +999,6 @@ export function BulkUploadPage() {
               </motion.div>
             )}
 
-            {/* Candidate Table */}
             {rows.length > 0 && (
               <motion.div variants={fadeUp}>
                 <Card className="overflow-hidden shadow-md">

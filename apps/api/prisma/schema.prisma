@@ -55,6 +55,13 @@ model InterviewSession {
   createdAt            DateTime        @default(now()) @map("created_at")
   updatedAt            DateTime        @updatedAt @map("updated_at")
 
+  // Tracks when the CURRENT processing attempt started.
+  // Reset to `now()` on every pipeline run (including manual retries),
+  // so processing time = completedAt - processingStartedAt (accurate, no outliers).
+  // Falls back to createdAt for legacy rows that predate this field.
+  processingStartedAt  DateTime        @map("processing_started_at")
+  processingAttempts   Int             @default(0) @map("processing_attempts")
+
   // SPK build status
   spkStatus            String?         @map("spk_status")   // 'pending' | 'building' | 'ready' | 'failed'
   spkError             String?         @map("spk_error")    @db.Text

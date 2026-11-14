@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   ArrowRight,
+  BarChart3,
   Briefcase,
   ChevronLeft,
   ChevronRight,
@@ -249,6 +250,12 @@ export function ComparePage() {
               </span>
             </div>
             <div className="flex items-center gap-2">
+              <Link to="/analytics">
+                <Button variant="ghost" size="sm">
+                  <BarChart3 className="mr-2 h-4 w-4" />
+                  <span className="hidden sm:inline">Analytics</span>
+                </Button>
+              </Link>
               <Link to="/upload">
                 <Button variant="ghost" size="sm">
                   <Sparkles className="mr-2 h-4 w-4" />

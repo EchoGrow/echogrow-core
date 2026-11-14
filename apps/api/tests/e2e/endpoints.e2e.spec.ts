@@ -175,6 +175,8 @@ describe('E2E: REST endpoints (no LLM calls)', () => {
     });
 
     it('returns a computed timeSaved object when status is COMPLETED', async () => {
+      // ✅ CHANGED: use processingStartedAt (not createdAt) — the pipeline
+      // now computes processing time from processingStartedAt.
       const s = await seedSession(prisma, {
         status: 'COMPLETED',
         isScored: true,
@@ -187,14 +189,9 @@ describe('E2E: REST endpoints (no LLM calls)', () => {
         scores: [2, 4, 2, 3],
         discrepancies: 2,
         gaps: ['Docker'],
-      });
-
-      await prisma.interviewSession.update({
-        where: { id: s.id },
-        data: {
-          createdAt: new Date(Date.now() - 90_000),
-          updatedAt: new Date(),
-        },
+        // ✅ CHANGED: processing window is now 90s (was created 90s ago)
+        processingStartedAt: new Date(Date.now() - 90_000),
+        completedAt: new Date(),
       });
 
       const { body } = await api().get(`/interviews/${s.id}/scorecard`).expect(200);
@@ -208,6 +205,7 @@ describe('E2E: REST endpoints (no LLM calls)', () => {
     });
 
     it('caps echoGrowSeconds at 180 seconds even when the pipeline took longer', async () => {
+      // ✅ CHANGED: use processingStartedAt (not createdAt)
       const s = await seedSession(prisma, {
         status: 'COMPLETED',
         isScored: true,
@@ -216,14 +214,13 @@ describe('E2E: REST endpoints (no LLM calls)', () => {
         transcript: 'x '.repeat(300),
         resume: 'y '.repeat(100),
       });
-      await seedScorecard(prisma, s.id, { scores: [3, 3, 3, 3], discrepancies: 0, gaps: [] });
-
-      await prisma.interviewSession.update({
-        where: { id: s.id },
-        data: {
-          createdAt: new Date(Date.now() - 600_000),
-          updatedAt: new Date(),
-        },
+      await seedScorecard(prisma, s.id, {
+        scores: [3, 3, 3, 3],
+        discrepancies: 0,
+        gaps: [],
+        // ✅ CHANGED: 600s processing window
+        processingStartedAt: new Date(Date.now() - 600_000),
+        completedAt: new Date(),
       });
 
       const { body } = await api().get(`/interviews/${s.id}/scorecard`).expect(200);

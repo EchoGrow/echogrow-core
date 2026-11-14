@@ -8,6 +8,7 @@ import {
   TrendingUp,
   Plus,
   GitCompare,
+  BarChart3,
 } from 'lucide-react'
 import { Logo } from '../brand/Logo'
 import { ThemeToggle } from '../ThemeToggle'
@@ -34,6 +35,12 @@ function DashboardHeader() {
             <Button variant="ghost" size="sm">
               <GitCompare className="h-4 w-4" />
               <span className="hidden sm:inline">Compare</span>
+            </Button>
+          </Link>
+          <Link to="/analytics">
+            <Button variant="ghost" size="sm">
+              <BarChart3 className="h-4 w-4" />
+              <span className="hidden sm:inline">Analytics</span>
             </Button>
           </Link>
           <Button variant="secondary" size="sm" onClick={() => navigate('/upload')}>
