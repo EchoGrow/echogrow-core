@@ -115,6 +115,10 @@ export async function seedSession(
     isVerified?: boolean;
     isPlanned?: boolean;
     structuredTranscript?: any;
+    // ✅ NEW: allows tests to simulate retries and custom processing windows
+    processingAttempts?: number;
+    processingStartedAt?: Date;
+    completedAt?: Date;
   } = {},
 ) {
   const transcript = opts.transcript ?? SHORT_TRANSCRIPT;
@@ -136,9 +140,13 @@ export async function seedSession(
       resume,
       resumeHash: sha256(resume),
       status: opts.status ?? 'QUEUED',
+      // ✅ NEW: required fields (processingStartedAt is non-nullable)
+      processingStartedAt: opts.processingStartedAt ?? new Date(),
+      processingAttempts: opts.processingAttempts ?? 1,
       isScored: opts.isScored ?? false,
       isVerified: opts.isVerified ?? false,
       isPlanned: opts.isPlanned ?? false,
+      ...(opts.completedAt !== undefined ? { completedAt: opts.completedAt } : {}),
       ...(opts.structuredTranscript !== undefined
         ? { structuredTranscript: opts.structuredTranscript }
         : {}),
@@ -153,11 +161,76 @@ export async function seedScorecard(
     scores?: number[];
     discrepancies?: number;
     gaps?: string[];
+    // ✅ NEW: allows tests to simulate real processing windows
+    processingStartedAt?: Date;
+    completedAt?: Date;
+    processingAttempts?: number;
   } = {},
 ) {
   const scores = opts.scores ?? [4, 4, 4, 4];
   const overall = scores.reduce((a, b) => a + b, 0) / scores.length;
 
+  // ✅ Fetch the session to compute timeSaved
+  const session = await prisma.interviewSession.findUnique({
+    where: { id: interviewId },
+    select: { transcript: true, resume: true, processingStartedAt: true },
+  });
+
+  if (!session) throw new Error('Session not found');
+
+  const startedAt = opts.processingStartedAt ?? session.processingStartedAt;
+  const completedAt = opts.completedAt ?? new Date();
+
+  // ✅ Apply processing window overrides
+  if (
+    opts.processingStartedAt ||
+    opts.completedAt ||
+    opts.processingAttempts !== undefined
+  ) {
+    await prisma.interviewSession.update({
+      where: { id: interviewId },
+      data: {
+        ...(opts.processingStartedAt
+          ? { processingStartedAt: opts.processingStartedAt }
+          : {}),
+        ...(opts.completedAt ? { completedAt: opts.completedAt } : {}),
+        ...(opts.processingAttempts !== undefined
+          ? { processingAttempts: opts.processingAttempts }
+          : {}),
+      },
+    });
+  }
+
+  // ✅ Compute and save timeSaved snapshot (mirrors pipeline's saveTimeSaved)
+  const countWords = (text: string) =>
+    text.trim().split(/\s+/).filter(Boolean).length;
+
+  const manualReviewMinutes =
+    5 +
+    countWords(session.transcript) / 150 +
+    countWords(session.resume) / 200 +
+    (opts.discrepancies ?? 0) * 3 +
+    scores.filter((s) => s <= 2).length * 4;
+
+  const rawSeconds = Math.max(
+    0,
+    (completedAt.getTime() - startedAt.getTime()) / 1000,
+  );
+  const echoGrowSeconds = Math.min(rawSeconds, 180);
+  const savedSeconds = Math.max(0, manualReviewMinutes * 60 - echoGrowSeconds);
+  const savedMinutes = savedSeconds < 60 ? 0 : savedSeconds / 60;
+
+  await prisma.interviewSession.update({
+    where: { id: interviewId },
+    data: {
+      manualReviewMinutes: Math.round(manualReviewMinutes * 10) / 10,
+      echoGrowSeconds: Math.round(echoGrowSeconds),
+      savedMinutes: Math.round(savedMinutes * 10) / 10,
+      completedAt,
+    },
+  });
+
+  // Create scorecard
   const scorecard = await prisma.scorecard.create({
     data: {
       interviewId,
@@ -314,13 +387,6 @@ export async function runPipelineWithRetry(
 // Bulk upload helpers
 // ------------------------------------------------------------
 
-/**
- * Attaches bulk files to a supertest request.
- * Usage:
- *   const req = api().post('/interviews/bulk-upload').field('metadata', JSON.stringify(meta));
- *   attachBulkFiles(req, files);
- *   const res = await req;
- */
 export function attachBulkFiles(
   req: any,
   files: { filename: string; content: string | Buffer }[],
@@ -335,9 +401,6 @@ export function attachBulkFiles(
   return req;
 }
 
-/**
- * Returns a synthetic transcript/cv pair (short, deterministic, no LLM).
- */
 export function validBulkPair(suffix: string) {
   return {
     transcript: {

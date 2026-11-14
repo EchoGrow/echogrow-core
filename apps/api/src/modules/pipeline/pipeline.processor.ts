@@ -59,6 +59,9 @@ export class PipelineProcessor extends WorkerHost {
 
       // ============================================================
       // STEP 0: mark as PROCESSING
+      // ✅ updateProgress now handles:
+      //    - processingStartedAt = now()
+      //    - processingAttempts increment
       // ============================================================
       await this.evaluationService.updateProgress(interviewId, 'PROCESSING', {
         isScored: false,
@@ -171,21 +174,32 @@ export class PipelineProcessor extends WorkerHost {
 
       // ============================================================
       // STEP 5: Time saved snapshot
+      // ✅ CHANGED: use processingStartedAt (start of this attempt)
+      //            instead of createdAt (which may be hours old after a retry).
       // ============================================================
       try {
+        const freshSession = await this.prisma.interviewSession.findUnique({
+          where: { id: interviewId },
+          select: {
+            transcript: true,
+            resume: true,
+            processingStartedAt: true,
+          },
+        });
+
         const scorecard = await this.prisma.scorecard.findUnique({
           where: { interviewId },
           include: { dimensions: true, discrepancies: true },
         });
 
-        if (scorecard) {
+        if (scorecard && freshSession) {
           const weakDimensionsCount = scorecard.dimensions.filter((d) => d.score <= 2).length;
           await this.evaluationService.saveTimeSaved(interviewId, {
-            transcript: session.transcript,
-            resume: session.resume,
+            transcript: freshSession.transcript,
+            resume: freshSession.resume,
             discrepanciesCount: scorecard.discrepancies.length,
             weakDimensionsCount,
-            createdAt: session.createdAt,
+            processingStartedAt: freshSession.processingStartedAt,
           });
         }
       } catch (cause: any) {
@@ -195,7 +209,7 @@ export class PipelineProcessor extends WorkerHost {
       }
 
       // ============================================================
-      // STEP 6: Enqueue SPK build (لا يتم await هنا)
+      // STEP 6: Enqueue SPK build
       // ============================================================
       try {
         await this.spkQueue.add(

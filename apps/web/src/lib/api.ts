@@ -1,3 +1,10 @@
+import type {
+  AnalyticsSummary,
+  AnalyticsRange,
+  AnalyticsDetailType,
+  AnalyticsDetailResponse,
+} from '@echogrow/shared'
+
 const API_BASE_URL = (import.meta.env.VITE_API_URL ?? '/api').replace(/\/+$/, '')
 
 const REQUEST_TIMEOUT_MS = 30_000
@@ -106,20 +113,20 @@ export interface DiscrepancyRecord {
   cvQuote: string
   interviewQuote: string
   confidence: number
-  severity: DiscrepancySeverity 
+  severity: DiscrepancySeverity
   action: 'flag_for_human_review'
   status: DiscrepancyStatus
-  reviewerNotes: string | null 
+  reviewerNotes: string | null
 }
 
 export interface DiscrepancyResponse {
   discrepancies: DiscrepancyRecord[]
 }
 
-export type ScorecardResponse = 
-  | NeedsReviewResponse 
-  | ScoredResponse 
-  | RejectedResponse 
+export type ScorecardResponse =
+  | NeedsReviewResponse
+  | ScoredResponse
+  | RejectedResponse
   | ProcessingResponse
   | FailedResponse
 
@@ -249,6 +256,8 @@ export interface InterviewListItem {
   pendingDiscrepancies: number
   totalDiscrepancies: number
   skillGaps: number
+  // ✅ NEW: retry tracking
+  processingAttempts: number
 }
 
 export interface InterviewListResponse {
@@ -313,6 +322,65 @@ export interface ComparisonDetailResponse {
   }>
   createdAt: string
   completedAt: string | null
+}
+
+// ============================================================
+// Analytics Types (complements the shared Zod schemas)
+// ============================================================
+
+export interface AnalyticsKpiSummary {
+  totalInterviews: number
+  completedInterviews: number
+  failedInterviews: number
+  needsReviewInterviews: number
+  rejectedInterviews: number
+  completionRate: number
+  avgProcessingTimeSeconds: number
+  avgManualReviewSeconds: number
+  avgSavedSeconds: number
+  retriedInterviews: number
+  avgProcessingAttempts: number
+  avgDiscrepanciesPerInterview: number
+  avgSkillGapsPerInterview: number
+  avgOverallScore: number
+}
+
+export interface RecentInterviewRecord {
+  id: string
+  candidateName: string
+  candidateEmail: string
+  status: string
+  overallScore: number | null
+  pendingDiscrepancies: number
+  completedAt: string | null
+  createdAt: string
+  processingAttempts: number
+}
+
+export interface ProcessingTimeRecord {
+  interviewId: string
+  candidateName: string
+  candidateEmail: string
+  processingSeconds: number
+  manualReviewSeconds: number
+  savedSeconds: number
+  savingsPercent: number
+  completedAt: string | null
+  processingAttempts: number      // ✅ NEW
+}
+
+export interface InterviewDetailRecord {
+  id: string
+  candidateName: string
+  candidateEmail: string
+  status: string
+  overallScore: number | null
+  pendingDiscrepancies: number
+  totalDiscrepancies: number
+  skillGaps: number
+  createdAt: string
+  completedAt: string | null
+  processingAttempts: number      // ✅ NEW
 }
 
 export class ApiError extends Error {
@@ -806,6 +874,67 @@ export async function getComparison(id: string): Promise<ComparisonDetailRespons
     if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
 
     return (await response.json()) as ComparisonDetailResponse
+  } catch (cause) {
+    if (cause instanceof ApiError) throw cause
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw new ApiError('The request timed out. Check your connection and try again.')
+    }
+    throw new ApiError('Could not reach the server. Check your connection and try again.')
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
+// ============================================================
+// Analytics API
+// ============================================================
+
+export async function getAnalyticsSummary(
+  range: AnalyticsRange = '30d',
+): Promise<AnalyticsSummary> {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/analytics/summary?range=${encodeURIComponent(range)}`,
+      { headers: { Accept: 'application/json' }, signal: controller.signal },
+    )
+
+    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+
+    return (await response.json()) as AnalyticsSummary
+  } catch (cause) {
+    if (cause instanceof ApiError) throw cause
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw new ApiError('The request timed out. Check your connection and try again.')
+    }
+    throw new ApiError('Could not reach the server. Check your connection and try again.')
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
+export async function getAnalyticsDetails(
+  type: AnalyticsDetailType,
+  range: AnalyticsRange = '30d',
+  status?: string,
+): Promise<AnalyticsDetailResponse> {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+
+  try {
+    const params = new URLSearchParams({ type, range })
+    if (status) params.set('status', status)
+
+    const response = await fetch(
+      `${API_BASE_URL}/analytics/details?${params.toString()}`,
+      { headers: { Accept: 'application/json' }, signal: controller.signal },
+    )
+
+    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+
+    return (await response.json()) as AnalyticsDetailResponse
   } catch (cause) {
     if (cause instanceof ApiError) throw cause
     if (cause instanceof DOMException && cause.name === 'AbortError') {

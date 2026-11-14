@@ -15,26 +15,33 @@ export class EvaluationService {
 
   /**
    * Updates the interview session's overall status AND the per-step boolean
-   * flags that the frontend polls. Both are updated together so the UI never
-   * sees an inconsistent snapshot.
+   * flags that the frontend polls.
    *
-   * Example:
-   *   updateProgress(id, 'SCORED', { isScored: true }) →
-   *     status = SCORED, isScored = true (isVerified/isPlanned untouched)
+   * When status transitions to PROCESSING, we also:
+   *   - Reset `processingStartedAt = now()` (start of this attempt)
+   *   - Increment `processingAttempts` (1 for initial, 2+ for retries)
    *
-   *   updateProgress(id, 'COMPLETED', { isScored: true, isVerified: true, isPlanned: true }) →
-   *     status = COMPLETED, all flags = true, completedAt = now()
+   * This ensures processing time = completedAt - processingStartedAt,
+   * giving accurate duration with no outliers (even after retries).
    */
   async updateProgress(
     interviewId: string,
     status: InterviewStatus,
     flags: { isScored?: boolean; isVerified?: boolean; isPlanned?: boolean } = {},
   ): Promise<void> {
+    const isProcessing = status === 'PROCESSING';
+
     await this.prisma.interviewSession.update({
       where: { id: interviewId },
       data: {
         status,
         ...flags,
+        ...(isProcessing
+          ? {
+              processingStartedAt: new Date(),
+              processingAttempts: { increment: 1 },
+            }
+          : {}),
         ...(status === 'COMPLETED' ? { completedAt: new Date() } : {}),
       },
     });
@@ -104,6 +111,14 @@ export class EvaluationService {
     return { scorecardId: scorecard.id };
   }
 
+  /**
+   * Saves the time-saved snapshot.
+   *
+   * uses `processingStartedAt` (not `createdAt`) to compute
+   * the actual processing duration. This is critical: after a retry, `createdAt`
+   * still points to the original upload (which may be hours ago), while
+   * `processingStartedAt` points to the start of the successful attempt.
+   */
   async saveTimeSaved(
     interviewId: string,
     params: {
@@ -111,7 +126,7 @@ export class EvaluationService {
       resume: string;
       discrepanciesCount: number;
       weakDimensionsCount: number;
-      createdAt: Date;
+      processingStartedAt: Date;
     },
   ): Promise<{
     manualReviewMinutes: number;
@@ -124,6 +139,9 @@ export class EvaluationService {
       CV_WPM: 200,
       MINUTES_PER_DISCREPANCY: 3,
       MINUTES_PER_WEAK_DIMENSION: 4,
+      // Cap only affects the SNAPSHOT (for display). The actual `echoGrowSeconds`
+      // can exceed this when LLM is slow, but the snapshot reports a realistic
+      // max so the "time saved" doesn't look absurd.
       ECHOGROW_CAP_SECONDS: 180,
     };
 
@@ -141,7 +159,11 @@ export class EvaluationService {
       params.weakDimensionsCount * MANUAL_REVIEW_CONSTANTS.MINUTES_PER_WEAK_DIMENSION;
 
     const completedAt = new Date();
-    const rawSeconds = Math.max(0, (completedAt.getTime() - params.createdAt.getTime()) / 1000);
+    // use processingStartedAt (start of the successful attempt)
+    const rawSeconds = Math.max(
+      0,
+      (completedAt.getTime() - params.processingStartedAt.getTime()) / 1000,
+    );
     const echoGrowSeconds = Math.min(rawSeconds, MANUAL_REVIEW_CONSTANTS.ECHOGROW_CAP_SECONDS);
 
     const savedSeconds = Math.max(0, manualReviewMinutes * 60 - echoGrowSeconds);

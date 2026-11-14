@@ -12,6 +12,7 @@ import {
   TrendingUp,
   Layers,
   GitCompare,
+  BarChart3,
 } from 'lucide-react'
 import { Logo } from '../components/brand/Logo'
 import { SEO } from '../components/SEO'
@@ -202,6 +203,12 @@ export function UploadPage() {
                 <Button variant="ghost" size="sm">
                   <GitCompare className="mr-2 h-4 w-4" />
                   <span className="hidden sm:inline">Compare</span>
+                </Button>
+              </Link>
+              <Link to="/analytics">
+                <Button variant="ghost" size="sm">
+                  <BarChart3 className="mr-2 h-4 w-4" />
+                  <span className="hidden sm:inline">Analytics</span>
                 </Button>
               </Link>
               <Link to="/bulk-upload">

@@ -6,9 +6,39 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../src/generated/prisma/client';
 
 const SYNTHETIC_TEST_CASES = [
-  { name: 'Maya Lin', email: 'maya.lin@example.com', category: 'clean', resumeFileName: 'clean_resume.txt', transcriptFileName: 'clean_interview.txt' },
-  { name: 'Ahmed Al-Mansoor', email: 'ahmed.mansoor@example.com', category: 'contradiction', resumeFileName: 'contradiction_resume.txt', transcriptFileName: 'contradiction_interview.txt' },
-  { name: 'Jordan Reed', email: 'jordan.reed@example.com', category: 'low-quality', resumeFileName: 'low_quality_resume.txt', transcriptFileName: 'low_quality_interview.txt' },
+  {
+    name: 'Maya Lin',
+    email: 'maya.lin@example.com',
+    category: 'clean',
+    resumeFileName: 'clean_resume.txt',
+    transcriptFileName: 'clean_interview.txt',
+    processingAttempts: 1,
+  },
+  {
+    name: 'Ahmed Al-Mansoor',
+    email: 'ahmed.mansoor@example.com',
+    category: 'contradiction',
+    resumeFileName: 'contradiction_resume.txt',
+    transcriptFileName: 'contradiction_interview.txt',
+    processingAttempts: 1,
+  },
+  {
+    name: 'Jordan Reed',
+    email: 'jordan.reed@example.com',
+    category: 'low-quality',
+    resumeFileName: 'low_quality_resume.txt',
+    transcriptFileName: 'low_quality_interview.txt',
+    processingAttempts: 1,
+  },
+  // Simulated retry case (to test Insights + processingAttempts)
+  {
+    name: 'Sara Odeh',
+    email: 'sara.odeh@example.com',
+    category: 'retry-simulation',
+    resumeFileName: 'clean_resume.txt',
+    transcriptFileName: 'clean_interview.txt',
+    processingAttempts: 3, // Simulates: 2 failures + 1 success
+  },
 ];
 
 const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
@@ -40,6 +70,9 @@ async function main() {
         continue;
       }
 
+      // processingStartedAt = createdAt (initial value)
+      // processingAttempts from the test case
+      const now = new Date();
       const session = await prisma.interviewSession.create({
         data: {
           candidateId: candidate.id,
@@ -47,9 +80,13 @@ async function main() {
           transcriptHash,
           resume,
           resumeHash: sha256(resume),
+          processingStartedAt: now,
+          processingAttempts: tc.processingAttempts,
         },
       });
-      console.log(`created [${tc.category}] ${tc.name} -> session ${session.id}`);
+      console.log(
+        `created [${tc.category}] ${tc.name} -> session ${session.id} (attempts: ${tc.processingAttempts})`,
+      );
     }
   } finally {
     await prisma.$disconnect();

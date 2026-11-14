@@ -49,6 +49,8 @@ CREATE TABLE "interview_sessions" (
     "completed_at" TIMESTAMP(3),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
+    "processing_started_at" TIMESTAMP(3) NOT NULL,
+    "processing_attempts" INTEGER NOT NULL DEFAULT 0,
     "spk_status" TEXT,
     "spk_error" TEXT,
 

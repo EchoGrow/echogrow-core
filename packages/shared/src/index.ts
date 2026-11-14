@@ -5,6 +5,7 @@ export * from './schemas/interview.schema';
 export * from './schemas/evaluation-worker.schema';
 export * from './schemas/spk.schema';
 export * from './schemas/comparison.schema';
+export * from './schemas/analytics.schema';
 
 export * from './data/job-titles';
 

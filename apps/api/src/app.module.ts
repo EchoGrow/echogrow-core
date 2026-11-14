@@ -12,6 +12,7 @@ import { RoadmapModule } from './modules/roadmap/roadmap.module';
 import { SpkModule } from './modules/spk/spk.module';
 import { PipelineModule } from './modules/pipeline/pipeline.module';
 import { CompareModule } from './modules/compare/compare.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 
@@ -43,6 +44,7 @@ import { APP_GUARD } from '@nestjs/core';
     SpkModule,
     PipelineModule,
     CompareModule,
+    AnalyticsModule,
   ],
   controllers: [AppController],
   providers: [

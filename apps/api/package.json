@@ -21,6 +21,7 @@
     "test:e2e:endpoints": "vitest run tests/e2e/endpoints.e2e.spec.ts",
     "test:e2e:pipeline": "vitest run tests/e2e/pipeline.e2e.spec.ts",
     "test:e2e:compare": "vitest run tests/e2e/compare.e2e.spec.ts",
+    "test:e2e:analytics": "vitest run tests/e2e/analytics.e2e.spec.ts",
     "test:all": "npm run test:unit && npm run test:integration && npm run test:e2e",
     "test:watch": "vitest",
     "test:unit:watch": "vitest tests/unit",

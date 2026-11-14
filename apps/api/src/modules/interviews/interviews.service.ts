@@ -57,7 +57,9 @@ export class InterviewsService {
   async upload(data: any) {
     const parsed = CreateInterviewSchema.safeParse(data);
     if (!parsed.success) {
-      throw new BadRequestException(parsed.error.issues.map((e: any) => e.message).join(', '));
+      throw new BadRequestException(
+        parsed.error.issues.map((e: any) => e.message).join(', '),
+      );
     }
 
     const { candidateName, candidateEmail, transcript, cv } = parsed.data;
@@ -89,6 +91,9 @@ export class InterviewsService {
       });
     }
 
+    // processingStartedAt is required (non-nullable). Initialize to `now()`.
+    // The pipeline resets it on every PROCESSING transition, and increments
+    // processingAttempts, so durations are always accurate.
     const session = await this.prisma.interviewSession.create({
       data: {
         candidateId: candidate.id,
@@ -97,6 +102,8 @@ export class InterviewsService {
         resume: cv,
         resumeHash,
         status: 'QUEUED',
+        processingStartedAt: new Date(),
+        processingAttempts: 0,
         isScored: false,
         isVerified: false,
         isPlanned: false,
@@ -344,8 +351,8 @@ export class InterviewsService {
         })
       : 0;
 
-    const weakDimensionsCount = session.scorecard.dimensions.filter((d) => d.score <= 2).length;
-
+    // timeSaved is computed by saveTimeSaved during the pipeline using
+    // processingStartedAt. We just read the persisted snapshot.
     let timeSaved:
       | {
           manualMinutes: number;
@@ -356,32 +363,20 @@ export class InterviewsService {
       | undefined;
 
     if (
-      (session as any).manualReviewMinutes != null &&
-      (session as any).echoGrowSeconds != null &&
-      (session as any).savedMinutes != null
+      session.manualReviewMinutes != null &&
+      session.echoGrowSeconds != null &&
+      session.savedMinutes != null
     ) {
       const savedSeconds = Math.max(
         0,
-        Math.round((session as any).manualReviewMinutes * 60 - (session as any).echoGrowSeconds),
+        Math.round(session.manualReviewMinutes * 60 - session.echoGrowSeconds),
       );
       timeSaved = {
-        manualMinutes: (session as any).manualReviewMinutes,
-        echoGrowSeconds: (session as any).echoGrowSeconds,
-        savedMinutes: (session as any).savedMinutes,
+        manualMinutes: session.manualReviewMinutes,
+        echoGrowSeconds: session.echoGrowSeconds,
+        savedMinutes: session.savedMinutes,
         savedSeconds,
       };
-    } else if (session.status === 'COMPLETED') {
-      timeSaved = this.computeTimeSavedFallback(
-        {
-          createdAt: session.createdAt,
-          completedAt: (session as any).completedAt ?? session.updatedAt,
-          updatedAt: session.updatedAt,
-          transcript: session.transcript,
-          resume: session.resume,
-        },
-        totalDiscrepancies,
-        weakDimensionsCount,
-      );
     }
 
     const response = {
@@ -404,8 +399,8 @@ export class InterviewsService {
       totalDiscrepancies,
       skillGaps,
       timeSaved,
-      spkStatus: (session as any).spkStatus ?? 'pending',
-      spkError: (session as any).spkError ?? null,
+      spkStatus: session.spkStatus ?? 'pending',
+      spkError: session.spkError ?? null,
     };
 
     return ScorecardSchema.parse(response);
@@ -424,6 +419,9 @@ export class InterviewsService {
       throw new BadRequestException('This interview cannot be re-evaluated.');
     }
 
+    // NOTE: We do NOT touch processingStartedAt or processingAttempts here.
+    // The pipeline's STEP 0 (updateProgress with 'PROCESSING') resets
+    // processingStartedAt = now() and increments processingAttempts.
     await this.prisma.interviewSession.update({
       where: { id: interviewId },
       data: {
@@ -459,7 +457,9 @@ export class InterviewsService {
     }
 
     if (session.status !== 'NEEDS_REVIEW') {
-      throw new BadRequestException('Only interviews in needs_review can be rejected.');
+      throw new BadRequestException(
+        'Only interviews in needs_review can be rejected.',
+      );
     }
 
     await this.prisma.interviewSession.update({
@@ -571,7 +571,11 @@ export class InterviewsService {
   async findAllCompleted(): Promise<InterviewListResponse> {
     const sessions = await this.prisma.interviewSession.findMany({
       where: { status: 'COMPLETED' },
-      include: {
+      select: {
+        id: true,
+        completedAt: true,
+        createdAt: true,
+        processingAttempts: true,
         candidate: { select: { name: true, email: true } },
         scorecard: {
           include: {
@@ -605,62 +609,18 @@ export class InterviewsService {
           candidateName: s.candidate.name,
           candidateEmail: s.candidate.email,
           completedAt: s.completedAt?.toISOString() ?? null,
+          createdAt: s.createdAt.toISOString(),
           overallScore,
           pendingDiscrepancies: s.scorecard!.discrepancies.filter(
             (d) => d.status === 'PENDING',
           ).length,
           totalDiscrepancies: s.scorecard!.discrepancies.length,
           skillGaps: s.scorecard!.roadmap?.items.length ?? 0,
+          processingAttempts: s.processingAttempts,
         };
       });
 
     this.logger.log(`Found ${interviews.length} completed interviews`);
     return { interviews, total: interviews.length };
-  }
-
-  private computeTimeSavedFallback(
-    session: {
-      createdAt: Date;
-      completedAt?: Date;
-      updatedAt: Date;
-      transcript: string;
-      resume: string;
-    },
-    discrepanciesCount: number,
-    weakDimensionsCount: number,
-  ) {
-    const C = {
-      BASE_MINUTES: 5,
-      TRANSCRIPT_WPM: 150,
-      CV_WPM: 200,
-      MINUTES_PER_DISCREPANCY: 3,
-      MINUTES_PER_WEAK_DIMENSION: 4,
-      ECHOGROW_CAP_SECONDS: 180,
-    };
-
-    const countWords = (text: string) =>
-      text.trim().split(/\s+/).filter(Boolean).length;
-
-    const manualMinutes =
-      C.BASE_MINUTES +
-      countWords(session.transcript) / C.TRANSCRIPT_WPM +
-      countWords(session.resume) / C.CV_WPM +
-      discrepanciesCount * C.MINUTES_PER_DISCREPANCY +
-      weakDimensionsCount * C.MINUTES_PER_WEAK_DIMENSION;
-
-    const endTime = session.completedAt ?? session.updatedAt;
-    const rawSeconds = Math.max(
-      0,
-      (endTime.getTime() - session.createdAt.getTime()) / 1000,
-    );
-    const echoGrowSeconds = Math.min(rawSeconds, C.ECHOGROW_CAP_SECONDS);
-    const savedSeconds = Math.max(0, manualMinutes * 60 - echoGrowSeconds);
-
-    return {
-      manualMinutes: Math.round(manualMinutes * 10) / 10,
-      echoGrowSeconds: Math.round(echoGrowSeconds),
-      savedMinutes: savedSeconds < 60 ? 0 : Math.round((savedSeconds / 60) * 10) / 10,
-      savedSeconds: Math.round(savedSeconds),
-    };
   }
 }
