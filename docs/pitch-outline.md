@@ -179,7 +179,7 @@ sequenceDiagram
 | --- | --- |
 | Interviews analysed | 48 |
 | Completion rate | 87.5% |
-| Average processing time | ~31 seconds |
+| Average processing time | ~40 seconds |
 | Average manual review time | ~45 minutes |
 | Average time saved | ~44 minutes per interview |
 | Average overall score | 3.7 / 5 |
@@ -283,7 +283,7 @@ The parser and prompts are language-agnostic today; the roadmap includes dedicat
 PostgreSQL via Prisma. Transcripts, resumes, scorecards, discrepancies, roadmaps, and reviewer decisions are persisted per session. Retention and access controls are on the Sprint 5+ roadmap.
 
 **Q: How long does an interview take?**
-The demo pipeline completes in roughly 30 seconds; manual review is modelled at ~45 minutes. Real latency depends on transcript length and provider throughput.
+The demo pipeline completes in roughly 40 seconds; manual review is modelled at ~45 minutes. Real latency depends on transcript length and provider throughput.
 
 **Q: Can I export the result?**
 Yes — PDF, Markdown, and JSON for the roadmap, plus a versioned SPK JSON profile for downstream tools.

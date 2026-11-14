@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-6-3178c6?logo=typescript&logoColor=white" />
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.6%20%2F%206.0-3178c6?logo=typescript&logoColor=white" />
   <img alt="NestJS" src="https://img.shields.io/badge/NestJS-12-e0234e?logo=nestjs&logoColor=white" />
   <img alt="React" src="https://img.shields.io/badge/React-19-61dafb?logo=react&logoColor=black" />
   <img alt="Prisma" src="https://img.shields.io/badge/Prisma-7-2d3748?logo=prisma&logoColor=white" />
