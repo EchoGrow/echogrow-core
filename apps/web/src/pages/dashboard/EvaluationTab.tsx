@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Quote, ChevronDown } from 'lucide-react';
 import { fadeUp, staggerContainer } from '../../lib/animations';
 import { cn } from '../../lib/cn';
+import { TranscriptContext } from '../../components/evaluation/TranscriptContext';
 
 function EvaluationSkeleton() {
   return (
@@ -153,14 +154,11 @@ export function EvaluationTab() {
                         transition={{ duration: 0.3, ease: 'easeInOut' }}
                         className="overflow-hidden"
                       >
-                        <blockquote className="mt-3 rounded-r-lg border-l-4 border-accent-500 bg-surface px-4 py-3 text-sm italic leading-relaxed text-fg-muted">
-                          "{dim.evidenceQuote}"
-                          {dim.timestamp && (
-                            <span className="ml-2 block text-xs not-italic text-fg-subtle">
-                              — {dim.timestamp}
-                            </span>
-                          )}
-                        </blockquote>
+                        <TranscriptContext
+                          turns={scorecard.structuredTranscript}
+                          quote={dim.evidenceQuote}
+                          timestamp={dim.timestamp}
+                        />
                       </motion.div>
                     )}
                   </AnimatePresence>

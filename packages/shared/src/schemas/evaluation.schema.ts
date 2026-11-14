@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SpeakerTurnSchema } from './evaluation-worker.schema';
 
 export const DimensionSchema = z.object({
   name: z.enum([
@@ -34,6 +35,13 @@ export const ScorecardSchema = z.union([
     candidateName: z.string().min(1),
     interviewDate: z.string(),
     dimensions: z.array(DimensionSchema),
+    // Speaker turns power the "View evidence" transcript timeline. Legacy rows
+    // may hold malformed JSON, so fall back to null instead of failing the
+    // whole scorecard response.
+    structuredTranscript: z
+      .array(SpeakerTurnSchema)
+      .nullish()
+      .catch(null),
     overallConfidence: z.number().min(0).max(1),
     pendingDiscrepancies: z.number().int().min(0),
     totalDiscrepancies: z.number().int().min(0),

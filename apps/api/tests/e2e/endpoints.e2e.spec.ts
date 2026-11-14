@@ -145,12 +145,17 @@ describe('E2E: REST endpoints (no LLM calls)', () => {
     });
 
     it('returns "scored" with 4 dimensions, pendingDiscrepancies and skillGaps', async () => {
+      const structuredTranscript = [
+        { speaker: 'Interviewer', text: 'Describe a hard bug you fixed.', timestamp: '00:00:05' },
+        { speaker: 'Candidate', text: 'I traced a memory leak in the billing worker.' },
+      ];
       const s = await seedSession(prisma, {
         status: 'COMPLETED',
         name: 'Scored User',
         isScored: true,
         isVerified: true,
         isPlanned: true,
+        structuredTranscript,
       });
       await seedScorecard(prisma, s.id, {
         scores: [1, 4, 3, 2],
@@ -169,6 +174,7 @@ describe('E2E: REST endpoints (no LLM calls)', () => {
         expect(d.reason).toBeTruthy();
         expect(d.evidenceQuote).toBeTruthy();
       }
+      expect(body.structuredTranscript).toEqual(structuredTranscript);
       expect(body.overallConfidence).toBeCloseTo(0.9);
       expect(body.pendingDiscrepancies).toBe(2);
       expect(body.skillGaps).toBe(3);

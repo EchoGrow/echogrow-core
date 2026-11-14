@@ -394,6 +394,7 @@ export class InterviewsService {
           timestamp: evidenceQuote?.timestamp ?? undefined,
         };
       }),
+      structuredTranscript: session.structuredTranscript,
       overallConfidence: session.scorecard.confidence ?? 0,
       pendingDiscrepancies,
       totalDiscrepancies,
