@@ -177,17 +177,17 @@ sequenceDiagram
 
 | Metric | Demo value |
 | --- | --- |
-| Interviews analysed | 48 |
-| Completion rate | 87.5% |
-| Average processing time | ~40 seconds |
-| Average manual review time | ~45 minutes |
-| Average time saved | ~44 minutes per interview |
+| Interviews analysed | 39 |
+| Completion rate | 74.4% |
+| Average processing time | ~42 seconds |
+| Average manual review time | ~10 minutes |
+| Average time saved | ~9 minutes per interview |
 | Average overall score | 3.7 / 5 |
-| Average discrepancies per interview | 1.8 |
-| Average skill gaps per interview | 2.4 |
-| Interviews with retries | 4 |
+| Average discrepancies per interview | ~0.7 |
+| Average skill gaps per interview | ~3.0 |
+| Interviews with retries | 3 |
 
-**The headline:** a 45-minute manual review becomes a **sub-minute** evidence-backed report, with a quote for every claim.
+**The headline:** a ~10-minute manual review becomes a **sub-minute** evidence-backed report, with a quote for every claim.
 
 ---
 
@@ -283,7 +283,7 @@ The parser and prompts are language-agnostic today; the roadmap includes dedicat
 PostgreSQL via Prisma. Transcripts, resumes, scorecards, discrepancies, roadmaps, and reviewer decisions are persisted per session. Retention and access controls are on the Sprint 5+ roadmap.
 
 **Q: How long does an interview take?**
-The demo pipeline completes in roughly 40 seconds; manual review is modelled at ~45 minutes. Real latency depends on transcript length and provider throughput.
+The demo pipeline completes in roughly 42 seconds; manual review is modelled at ~10 minutes. Real latency depends on transcript length and provider throughput.
 
 **Q: Can I export the result?**
 Yes — PDF, Markdown, and JSON for the roadmap, plus a versioned SPK JSON profile for downstream tools.

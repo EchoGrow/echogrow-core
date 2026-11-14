@@ -33,7 +33,7 @@ Hiring teams collect hours of interview signal, then reduce it to a gut feeling 
 - **Portable profile** — a versioned SPK JSON contract for downstream tools.
 - **Team analytics** — completion rates, time saved, top missing skills, and role-aware candidate comparison.
 
-> **The headline:** a ~45-minute manual review becomes a sub-minute, quote-backed report.
+> **The headline:** a ~10-minute manual review becomes a sub-minute, quote-backed report.
 
 ---
 
