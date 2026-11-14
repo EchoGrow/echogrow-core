@@ -19,8 +19,6 @@
     "rimraf": "^6.0.0"
   },
   "dependencies": {
-    "@rolldown/binding-linux-x64-gnu": "^1.0.0",
-    "lightningcss-linux-x64-gnu": "^1.32.0",
     "@lilac-labs/words-to-numbers": "^2.1.5"
   }
 }
