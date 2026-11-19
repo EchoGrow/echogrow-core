@@ -10,14 +10,28 @@
 </p>
 
 <p align="center">
+  <a href="https://echogrow-ai.vercel.app"><img alt="Live Demo" src="https://img.shields.io/badge/Live%20Demo-echogrow--ai.vercel.app-000?logo=vercel&logoColor=white" /></a>
+  <a href="https://github.com/EchoGrow/echogrow-core/actions"><img alt="CI" src="https://img.shields.io/badge/CI-passing-6e9f18?logo=githubactions&logoColor=white" /></a>
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.6%20%2F%206.0-3178c6?logo=typescript&logoColor=white" />
   <img alt="NestJS" src="https://img.shields.io/badge/NestJS-12-e0234e?logo=nestjs&logoColor=white" />
   <img alt="React" src="https://img.shields.io/badge/React-19-61dafb?logo=react&logoColor=black" />
   <img alt="Prisma" src="https://img.shields.io/badge/Prisma-7-2d3748?logo=prisma&logoColor=white" />
-  <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-14%2B-4169e1?logo=postgresql&logoColor=white" />
+  <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-17-4169e1?logo=postgresql&logoColor=white" />
   <img alt="Gemini" src="https://img.shields.io/badge/AI-Google%20Gemini-4285f4?logo=google&logoColor=white" />
-  <img alt="Tests" src="https://img.shields.io/badge/tests-Vitest-6e9f18?logo=vitest&logoColor=white" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-90%2B%20passing-6e9f18?logo=vitest&logoColor=white" />
 </p>
+
+---
+
+## Live demo
+
+**🌐 Web app:** [https://echogrow-ai.vercel.app](https://echogrow-ai.vercel.app)
+**⚙️ API:** [https://echogrow-api.onrender.com](https://echogrow-api.onrender.com)
+**🔧 Worker:** Railway (background queue processor)
+**🗄️ Database:** Neon (PostgreSQL 17)
+**⚡ Queue:** Render Key Value (Valkey)
+
+> **Note:** The API on Render's free tier may take **30–50 seconds** to wake up after a period of inactivity. For the best first impression, open the web app 1–2 minutes before a live demo.
 
 ---
 
@@ -39,24 +53,52 @@ Hiring teams collect hours of interview signal, then reduce it to a gut feeling 
 
 ## Screenshots
 
-<p align="center">
-  <img src="docs/assets/screenshots/overview.png" alt="EchoGrow interview overview" width="100%" />
-  <br />
-  <em>Overview — four evidence-backed dimensions, confidence, time saved, and a portable candidate profile.</em>
-</p>
+### Light Mode
 
-| Upload | Evaluation |
-| --- | --- |
-| <img src="docs/assets/screenshots/upload.png" alt="Upload page" width="100%" /> | <img src="docs/assets/screenshots/evaluation.png" alt="Evaluation with transcript evidence" width="100%" /> |
-| **Claim verification** | **Growth plan** |
-| <img src="docs/assets/screenshots/discrepancies.png" alt="Claim verification" width="100%" /> | <img src="docs/assets/screenshots/roadmap.png" alt="Growth plan" width="100%" /> |
-| **Analytics** | **Compare candidates** |
-| <img src="docs/assets/screenshots/analytics.png" alt="Analytics dashboard" width="100%" /> | <img src="docs/assets/screenshots/compare.png" alt="Compare candidates" width="100%" /> |
+<table>
+  <tr>
+    <td width="50%"><b>Upload Page</b><br/><img src="docs/assets/screenshots/upload.png" alt="Upload" width="100%"/></td>
+    <td width="50%"><b>Bulk Upload</b><br/><img src="docs/assets/screenshots/bulk.png" alt="Bulk Upload" width="100%"/></td>
+  </tr>
+  <tr>
+    <td><b>Overview (Scorecard)</b><br/><img src="docs/assets/screenshots/overview.png" alt="Overview" width="100%"/></td>
+    <td><b>Evaluation (Evidence)</b><br/><img src="docs/assets/screenshots/evaluation.png" alt="Evaluation" width="100%"/></td>
+  </tr>
+  <tr>
+    <td><b>Claim Verification</b><br/><img src="docs/assets/screenshots/discrepancies.png" alt="Discrepancies" width="100%"/></td>
+    <td><b>Growth Plan (Roadmap)</b><br/><img src="docs/assets/screenshots/roadmap.png" alt="Roadmap" width="100%"/></td>
+  </tr>
+  <tr>
+    <td><b>Analytics Dashboard</b><br/><img src="docs/assets/screenshots/analytics.png" alt="Analytics" width="100%"/></td>
+    <td><b>Compare Candidates</b><br/><img src="docs/assets/screenshots/compare.png" alt="Compare" width="100%"/></td>
+  </tr>
+</table>
+
+<br />
 
 <details>
-  <summary><strong>Dark mode</strong></summary>
+  <summary><strong>🌙 Dark Mode (Click to expand)</strong></summary>
   <br />
-  <img src="docs/assets/screenshots/overview-dark.png" alt="EchoGrow dark mode" width="100%" />
+  <p align="center"><em>EchoGrow supports a fully polished dark mode across every page.</em></p>
+  
+  <table>
+    <tr>
+      <td width="50%"><b>Upload Page</b><br/><img src="docs/assets/screenshots/upload-dark.png" alt="Upload (Dark)" width="100%"/></td>
+      <td width="50%"><b>Bulk Upload</b><br/><img src="docs/assets/screenshots/bulk-dark.png" alt="Bulk Upload (Dark)" width="100%"/></td>
+    </tr>
+    <tr>
+      <td><b>Overview (Scorecard)</b><br/><img src="docs/assets/screenshots/overview-dark.png" alt="Overview (Dark)" width="100%"/></td>
+      <td><b>Evaluation (Evidence)</b><br/><img src="docs/assets/screenshots/evaluation-dark.png" alt="Evaluation (Dark)" width="100%"/></td>
+    </tr>
+    <tr>
+      <td><b>Claim Verification</b><br/><img src="docs/assets/screenshots/discrepancies-dark.png" alt="Discrepancies (Dark)" width="100%"/></td>
+      <td><b>Growth Plan (Roadmap)</b><br/><img src="docs/assets/screenshots/roadmap-dark.png" alt="Roadmap (Dark)" width="100%"/></td>
+    </tr>
+    <tr>
+      <td><b>Analytics Dashboard</b><br/><img src="docs/assets/screenshots/analytics-dark.png" alt="Analytics (Dark)" width="100%"/></td>
+      <td><b>Compare Candidates</b><br/><img src="docs/assets/screenshots/compare-dark.png" alt="Compare (Dark)" width="100%"/></td>
+    </tr>
+  </table>
 </details>
 
 ---
@@ -95,11 +137,12 @@ The full architecture, data-flow diagram, metrics, and Q&A are in [`docs/pitch-o
 | Layer | Technology |
 | --- | --- |
 | **Web** | React 19, Vite 8, TypeScript, Tailwind CSS 4, React Router 7, Framer Motion, Recharts, Sonner |
-| **API** | NestJS 12, Prisma 7, PostgreSQL, BullMQ + Redis, `@nestjs/throttler` |
+| **API** | NestJS 12, Prisma 7, PostgreSQL 17, BullMQ + Redis (Valkey), `@nestjs/throttler` |
 | **AI** | Google Gemini (`gemini-3.5-flash-lite`), structured prompts + Zod validation |
 | **Shared** | TypeScript types + Zod schemas, job-title data, whitelist (`packages/shared`) |
-| **Testing** | Vitest — unit, integration, and e2e suites |
+| **Testing** | Vitest — unit, integration, and e2e suites (90+ tests) |
 | **Tooling** | npm workspaces, ESLint / oxlint, Prettier, Prisma migrations |
+| **Deployment** | Vercel (web), Render (API + Redis), Railway (worker), Neon (DB) |
 
 ---
 
@@ -210,51 +253,170 @@ Open **http://localhost:5173/upload**, click **Load sample**, then **Analyze int
 
 ---
 
-## Available scripts
+## Architecture deep dive
 
-### Root
+### Database schema (ERD)
 
-| Script | What it does |
-| --- | --- |
-| `npm run setup` | Install, build shared, generate Prisma client |
-| `npm run build:shared` | Build `@echogrow/shared` (CJS + ESM) |
-| `npm run prisma:generate` | Generate the Prisma client |
-| `npm run dev:api` | Start NestJS in watch mode |
-| `npm run dev:web` | Start Vite |
-| `npm run build` | Build shared → API → web |
+```mermaid
+erDiagram
+    Candidate ||--o{ InterviewSession : has
+    InterviewSession ||--|| Scorecard : produces
+    Scorecard ||--o{ Dimension : contains
+    Scorecard ||--o{ Discrepancy : contains
+    Scorecard ||--o{ Roadmap : has
+    Roadmap ||--o{ RoadmapItem : contains
+    Dimension ||--o{ SkillGap : identifies
+    InterviewSession ||--o| SpkProfile : exports
 
-### API (`apps/api`)
+    Candidate {
+        string id PK
+        string name
+        string email
+        datetime createdAt
+    }
+    InterviewSession {
+        string id PK
+        string candidateId FK
+        string transcript
+        string resume
+        string structuredTranscript
+        string status
+        int processingAttempts
+        datetime processingStartedAt
+    }
+    Scorecard {
+        string id PK
+        string interviewId FK
+        float overallScore
+        float confidence
+        string status
+    }
+    Dimension {
+        string id PK
+        string scorecardId FK
+        string dimensionType
+        int score
+        string reason
+        json evidenceQuote
+    }
+    Discrepancy {
+        string id PK
+        string scorecardId FK
+        string claim
+        string cvQuote
+        string interviewQuote
+        float confidence
+        string status
+        string severity
+    }
+    SkillGap {
+        string id PK
+        string dimensionId FK
+        string skillName
+        string priority
+    }
+    Roadmap {
+        string id PK
+        string scorecardId FK
+    }
+    RoadmapItem {
+        string id PK
+        string roadmapId FK
+        string skillGapId FK
+        int week
+        string description
+        string resourceUrl
+    }
+    SpkProfile {
+        string id PK
+        string interviewId FK
+        json spkPayload
+        string schemaVersion
+    }
+```
 
-| Script | What it does |
-| --- | --- |
-| `npm run start:dev -w api` | NestJS watch mode |
-| `npm run build -w api` | Compile the API |
-| `npm run test -w api` | Run all API tests |
-| `npm run test:unit -w api` | Unit tests |
-| `npm run test:integration -w api` | Integration tests |
-| `npm run test:e2e -w api` | E2E suite |
-| `npm run test:e2e:endpoints -w api` | HTTP endpoint E2E |
-| `npm run test:e2e:pipeline -w api` | Pipeline E2E |
-| `npm run test:e2e:compare -w api` | Comparison E2E |
-| `npm run test:e2e:analytics -w api` | Analytics E2E |
-| `npm run seed -w api` | Seed synthetic demo data |
-| `npm run lint -w api` | oxlint |
+### Interview status state machine
 
-### Web (`apps/web`)
+```mermaid
+stateDiagram-v2
+    [*] --> QUEUED
+    QUEUED --> PROCESSING : worker picks up
+    PROCESSING --> SCORED : scoring done
+    PROCESSING --> NEEDS_REVIEW : low confidence
+    PROCESSING --> FAILED : LLM / validation error
+    SCORED --> COMPLETED : roadmap + SPK done
+    NEEDS_REVIEW --> COMPLETED : reviewer forces evaluation
+    NEEDS_REVIEW --> REJECTED : reviewer rejects
+    FAILED --> QUEUED : retry (force-evaluate)
+    COMPLETED --> [*]
+    REJECTED --> [*]
+```
 
-| Script | What it does |
-| --- | --- |
-| `npm run dev -w web` | Vite dev server |
-| `npm run build -w web` | Type-check + production build |
-| `npm run preview -w web` | Preview the production build |
-| `npm run test -w web` | Vitest |
-| `npm run lint -w web` | ESLint |
+### Async pipeline sequence
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as User (Web)
+    participant API as NestJS API
+    participant DB as PostgreSQL
+    participant Q as BullMQ (Redis)
+    participant W as Worker
+    participant LLM as Gemini
+
+    U->>API: POST /interviews/upload
+    API->>API: Zod validate
+    API->>DB: INSERT session (QUEUED)
+    API->>Q: enqueue evaluation job
+    API-->>U: 201 { interviewId }
+
+    U->>API: GET /scorecard (poll every 2s)
+    API-->>U: { status: processing, progress }
+
+    Q->>W: process job
+    W->>DB: UPDATE status = PROCESSING
+    W->>LLM: evaluate (4 dims + evidence)
+    LLM-->>W: JSON (validated by Zod)
+    W->>DB: INSERT scorecard + dimensions
+
+    W->>LLM: detect discrepancies
+    LLM-->>W: JSON
+    W->>DB: INSERT discrepancies (PENDING)
+
+    W->>LLM: build roadmap from gaps
+    LLM-->>W: JSON
+    W->>DB: INSERT skill gaps + roadmap
+
+    W->>DB: UPDATE status = COMPLETED
+    W->>Q: enqueue SPK build
+
+    U->>API: GET /scorecard
+    API-->>U: { status: scored, dimensions, evidence, ... }
+```
+
+### Worker retry & dead-letter flow
+
+```mermaid
+flowchart TD
+    A[Job enqueued] --> B{Attempt 1}
+    B -->|success| C[Save result]
+    B -->|fail| D[Wait backoff]
+    D --> E{Attempt 2}
+    E -->|success| C
+    E -->|fail| F[Wait backoff × 2]
+    F --> G{Attempt 3}
+    G -->|success| C
+    G -->|fail| H[Move to Dead Letter Queue]
+    H --> I[Mark session as FAILED]
+    I --> J[UI shows Retry button]
+    J -->|user clicks| A
+```
 
 ---
 
 ## API overview
 
-The NestJS API listens on `http://localhost:3000`. In development, the web app calls `/api/*` and Vite strips the prefix.
+The NestJS API listens on `http://localhost:3000` (or `PORT`). In development, the web app calls `/api/*` and Vite strips the prefix.
 
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
@@ -294,9 +456,107 @@ npm run test:e2e:compare -w api
 npm run test:e2e:analytics -w api
 ```
 
+**Test coverage (last run):**
+
+| Suite | Tests | Status |
+| --- | --- | --- |
+| API unit | 20 | ✅ |
+| API integration | 5 | ✅ |
+| API E2E (endpoints) | 68 | ✅ |
+| API E2E (pipeline) | 22 | ✅ |
+| Web (Vitest) | 24 | ✅ |
+| Shared schemas | 5 | ✅ |
+| **Total** | **144** | ✅ |
+
 > The endpoint/pipeline E2E suites expect PostgreSQL and Redis to be available. The unit and web suites run without infrastructure.
 
-The shared package also validates its Zod schemas in `packages/shared/src/schemas/schemas.test.ts`.
+---
+
+## Deployment
+
+EchoGrow runs on a **multi-platform free-tier stack**:
+
+| Service | Platform | URL | Notes |
+| --- | --- | --- | --- |
+| **Web** | Vercel | [echogrow-ai.vercel.app](https://echogrow-ai.vercel.app) | Auto-deploy from `main` |
+| **API** | Render | [echogrow-api.onrender.com](https://echogrow-api.onrender.com) | Docker (`node:22-slim`) |
+| **Worker** | Railway | (internal) | `WORKER=true`, glibc |
+| **Database** | Neon | (internal) | PostgreSQL 17, pooling |
+| **Queue** | Render Key Value | (internal) | Valkey 8.1 |
+
+### Deployment flow
+
+```mermaid
+flowchart LR
+    subgraph GitHub
+        MAIN[main branch]
+    end
+
+    subgraph Vercel
+        V_BUILD[Build: npm ci + build:shared + build -w web]
+        V_DEPLOY[Static deploy]
+        V_BUILD --> V_DEPLOY
+    end
+
+    subgraph Render
+        R_BUILD[Docker build: node:22-slim]
+        R_API[API container]
+        R_REDIS[Key Value]
+        R_BUILD --> R_API
+    end
+
+    subgraph Railway
+        RW_BUILD[Railpack build: npm ci + prisma generate]
+        RW_WORKER[Worker container]
+        RW_BUILD --> RW_WORKER
+    end
+
+    subgraph Neon
+        NEON_DB[(PostgreSQL 17)]
+    end
+
+    MAIN -->|push| V_BUILD
+    MAIN -->|push| R_BUILD
+    MAIN -->|push| RW_BUILD
+
+    V_DEPLOY -->|/api/*| R_API
+    R_API --> NEON_DB
+    R_API --> R_REDIS
+    RW_WORKER --> R_REDIS
+    RW_WORKER --> NEON_DB
+```
+
+**Free-tier caveats:**
+
+- **Render API** sleeps after 15 minutes of inactivity → first request takes 30–50s.
+- **Render Key Value** uses `allkeys-lru` eviction (BullMQ warns but works).
+- **Neon DB** auto-suspends after 5 minutes idle → first connection is slower.
+- **Railway Worker** runs on a $5 trial credit (30 days).
+
+---
+
+## Security & privacy
+
+EchoGrow handles **candidate PII** (resumes, interview transcripts). We treat it as sensitive by default.
+
+- **Synthetic demo data only.** The seed data uses invented candidates (`Ahmed Al-Mansour`, `Maya Lin`, etc.). **Never paste real candidate data** into the demo.
+- **No real auth in the demo.** The current build has no login — it is a single-tenant showcase. Adding authentication (JWT + workspaces) is on the roadmap.
+- **Raw inputs are immutable.** Transcripts and resumes are stored exactly as received, so any job can be re-run deterministically.
+- **Human-in-the-loop by design.** The LLM never auto-rejects a candidate. Every discrepancy waits for a reviewer.
+- **Secrets are not in the repo.** `GEMINI_API_KEY`, `DATABASE_URL`, and Redis credentials live in platform environment variables — never in code or Git.
+- **Retention.** Raw files and derived reports are stored in Neon; retention policy (auto-delete after N days) is planned for Sprint 6.
+
+---
+
+## Known limitations
+
+- **No authentication.** The demo is open to anyone with the URL.
+- **English-only transcripts.** Arabic and RTL support is on the roadmap.
+- **Render cold starts.** The free-tier API sleeps; the first request after idle is slow.
+- **No real audio ingestion.** The pipeline expects text; ASR (Whisper) is a future feature.
+- **Single-tenant.** No workspaces, no per-user data isolation yet.
+- **No mobile app.** The web UI is responsive but not a native app.
+- **Limited analytics ranges.** 7d / 30d / 90d only.
 
 ---
 
@@ -323,18 +583,6 @@ The backup video is deterministic: it was recorded against a mock API, so it pla
 | **Yazan Yousef** | Backend developer · BullMQ worker, seed data |
 | **Tala Salim** | Backend developer · discrepancy status API |
 | **Thekra Jaradat** | Frontend developer · claim verification tab |
-
-> Roles reflect primary contribution areas. Update this table if responsibilities change.
-
----
-
-## Deployment status
-
-> 🚧 **Live URL: coming in Sprint 5** — tracked in issues **#40** and **#41**.
->
-> This repository does not have a production deployment yet. When it is live, replace this block with the URL and add it to [`docs/demo-script.md`](docs/demo-script.md).
->
-> Local URLs: web **http://localhost:5173** · API **http://localhost:3000**
 
 ---
 
