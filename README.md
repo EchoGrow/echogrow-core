@@ -305,7 +305,7 @@ The shared package also validates its Zod schemas in `packages/shared/src/schema
 | Resource | Link |
 | --- | --- |
 | **3-minute live demo script** | [`docs/demo-script.md`](docs/demo-script.md) |
-| **Backup demo video (2:24, narrated)** | [`docs/assets/echogrow-demo-720p.mp4`](docs/assets/echogrow-demo-720p.mp4) |
+| **Backup demo video (3:05, narrated)** | [`docs/assets/echogrow-demo-720p.mp4`](docs/assets/echogrow-demo-720p.mp4) |
 | **Video kit + narration transcript** | [`docs/demo-video.md`](docs/demo-video.md) |
 | **Pitch outline + architecture + Q&A** | [`docs/pitch-outline.md`](docs/pitch-outline.md) |
 
