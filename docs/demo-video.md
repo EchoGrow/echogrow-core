@@ -1,7 +1,7 @@
 # EchoGrow — Backup Demo Video Kit
 
 > **File:** [`docs/assets/echogrow-demo-720p.mp4`](assets/echogrow-demo-720p.mp4)
-> **Duration:** 2:24 · **Resolution:** 1280×800 · **Frame rate:** 30 fps · **Audio:** narrated (AAC)
+> **Duration:** 3:05 · **Resolution:** 1280×800 · **Frame rate:** 30 fps · **Audio:** narrated (AAC)
 > **Purpose:** a deterministic fallback for demo day, plus a ready-to-record script if the team wants to replace the synthetic voice.
 
 ---
@@ -21,7 +21,9 @@
 | Claim verification | 1:19 | The discrepancy list is empty |
 | Growth plan | 1:35 | The roadmap endpoint fails |
 | Analytics | 1:53 | The charts are empty |
-| Closing | 2:14 | You need a clean ending |
+| Compare candidates | 2:14 | The comparison view fails |
+| Bulk upload | 2:34 | The bulk upload page fails |
+| Closing | 2:55 | You need a clean ending |
 
 ---
 
@@ -36,8 +38,10 @@
 | **1:01** | Open the Evaluation tab to inspect each dimension. Choose View evidence, and EchoGrow highlights the exact quote inside the surrounding conversation, with speaker labels and timestamps. No more hunting through a long transcript. |
 | **1:19** | Claim verification compares what the candidate said with what the resume claims. Contradictions are ranked by severity and confidence, and a reviewer can confirm or dismiss each flag with a note for the audit trail. |
 | **1:35** | The growth plan converts verified skill gaps into a week-by-week roadmap, with priorities and learning resources. Export it as PDF, Markdown, or JSON for the candidate or the hiring manager. |
-| **1:53** | Analytics shows completion rates, average scores, top missing skills, and time saved across every interview. The compare view then ranks candidates side by side for a specific target role. |
-| **2:14** | EchoGrow makes hiring faster, fairer, and evidence-based. From transcript to decision, in one workflow. |
+| **1:53** | Analytics shows completion rates, average scores, top missing skills, and time saved across every interview: 39 interviews analysed, 74 percent completion, about 42 seconds per analysis, and roughly 10 minutes saved per interview. |
+| **2:14** | The compare view ranks candidates side by side for a specific target role, with per-dimension winners and a clear recommendation. Same rubric, same evidence, for every candidate. |
+| **2:34** | Bulk upload lets an agency process a whole shortlist at once: drop transcript and resume pairs, and EchoGrow pairs, validates, and analyses each row with per-row status. |
+| **2:55** | EchoGrow makes hiring faster, fairer, and evidence-based. From transcript to decision, in one workflow. |
 
 ---
 
@@ -53,7 +57,9 @@
 | 1:19–1:35 | `/discrepancies` | Severity/confidence badges, **Show reasoning** on the leadership contradiction |
 | 1:35–1:53 | `/roadmap` | Priority gaps + week-by-week roadmap |
 | 1:53–2:11 | `/analytics` | KPI cards, charts, recent interviews |
-| 2:14–2:24 | Overview | Closing shot |
+| 2:14–2:32 | `/compare` | Candidate selection + role-aware comparison |
+| 2:34–2:52 | `/bulk-upload` | Pairing, validation, per-row status |
+| 2:55–3:05 | Overview | Closing shot |
 
 ---
 
@@ -127,7 +133,7 @@ The synthetic voice is clear but robotic. If you have 15 minutes, record the sam
 
 | File | Purpose |
 | --- | --- |
-| `docs/assets/echogrow-demo-720p.mp4` | The backup video (committed, 5.9 MB) |
+| `docs/assets/echogrow-demo-720p.mp4` | The backup video (committed, 6.9 MB) |
 | `docs/demo-script.md` | 3-minute live demo run sheet |
 | `docs/pitch-outline.md` | Pitch deck outline, architecture, metrics, Q&A |
 | `docs/assets/screenshots/` | Still screenshots used in the README |
