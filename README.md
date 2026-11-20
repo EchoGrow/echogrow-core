@@ -18,7 +18,7 @@
   <img alt="Prisma" src="https://img.shields.io/badge/Prisma-7-2d3748?logo=prisma&logoColor=white" />
   <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-17-4169e1?logo=postgresql&logoColor=white" />
   <img alt="Gemini" src="https://img.shields.io/badge/AI-Google%20Gemini-4285f4?logo=google&logoColor=white" />
-  <img alt="Tests" src="https://img.shields.io/badge/tests-90%2B%20passing-6e9f18?logo=vitest&logoColor=white" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-144%20passing-6e9f18?logo=vitest&logoColor=white" />
 </p>
 
 ---
@@ -108,7 +108,7 @@ Hiring teams collect hours of interview signal, then reduce it to a gut feeling 
 ```mermaid
 flowchart LR
   A[Transcript + resume] --> B[Upload and validate]
-  B --> C[(PostgreSQL<br/>session: QUEUED)]
+  B --> C[("PostgreSQL<br/>session: QUEUED")]
   B --> D[BullMQ<br/>evaluation queue]
   D --> E[Pipeline worker]
   E --> F[Score 4 dimensions<br/>+ verbatim evidence]
@@ -140,7 +140,7 @@ The full architecture, data-flow diagram, metrics, and Q&A are in [`docs/pitch-o
 | **API** | NestJS 12, Prisma 7, PostgreSQL 17, BullMQ + Redis (Valkey), `@nestjs/throttler` |
 | **AI** | Google Gemini (`gemini-3.5-flash-lite`), structured prompts + Zod validation |
 | **Shared** | TypeScript types + Zod schemas, job-title data, whitelist (`packages/shared`) |
-| **Testing** | Vitest — unit, integration, and e2e suites (90+ tests) |
+| **Testing** | Vitest — unit, integration, and e2e suites (144 tests) |
 | **Tooling** | npm workspaces, ESLint / oxlint, Prettier, Prisma migrations |
 | **Deployment** | Vercel (web), Render (API + Redis), Railway (worker), Neon (DB) |
 
@@ -338,16 +338,16 @@ erDiagram
 ### Interview status state machine
 
 ```mermaid
-stateDiagram-v2
+stateDiagram
     [*] --> QUEUED
     QUEUED --> PROCESSING : worker picks up
     PROCESSING --> SCORED : scoring done
     PROCESSING --> NEEDS_REVIEW : low confidence
-    PROCESSING --> FAILED : LLM / validation error
-    SCORED --> COMPLETED : roadmap + SPK done
+    PROCESSING --> FAILED : LLM or validation error
+    SCORED --> COMPLETED : roadmap and SPK done
     NEEDS_REVIEW --> COMPLETED : reviewer forces evaluation
     NEEDS_REVIEW --> REJECTED : reviewer rejects
-    FAILED --> QUEUED : retry (force-evaluate)
+    FAILED --> QUEUED : retry force-evaluate
     COMPLETED --> [*]
     REJECTED --> [*]
 ```
@@ -368,30 +368,30 @@ sequenceDiagram
     API->>API: Zod validate
     API->>DB: INSERT session (QUEUED)
     API->>Q: enqueue evaluation job
-    API-->>U: 201 { interviewId }
+    API-->>U: 201 interviewId
 
     U->>API: GET /scorecard (poll every 2s)
-    API-->>U: { status: processing, progress }
+    API-->>U: status processing progress
 
     Q->>W: process job
-    W->>DB: UPDATE status = PROCESSING
-    W->>LLM: evaluate (4 dims + evidence)
-    LLM-->>W: JSON (validated by Zod)
-    W->>DB: INSERT scorecard + dimensions
+    W->>DB: UPDATE status PROCESSING
+    W->>LLM: evaluate 4 dims and evidence
+    LLM-->>W: JSON validated by Zod
+    W->>DB: INSERT scorecard and dimensions
 
     W->>LLM: detect discrepancies
     LLM-->>W: JSON
-    W->>DB: INSERT discrepancies (PENDING)
+    W->>DB: INSERT discrepancies PENDING
 
     W->>LLM: build roadmap from gaps
     LLM-->>W: JSON
-    W->>DB: INSERT skill gaps + roadmap
+    W->>DB: INSERT skill gaps and roadmap
 
-    W->>DB: UPDATE status = COMPLETED
+    W->>DB: UPDATE status COMPLETED
     W->>Q: enqueue SPK build
 
     U->>API: GET /scorecard
-    API-->>U: { status: scored, dimensions, evidence, ... }
+    API-->>U: status scored dimensions evidence
 ```
 
 ### Worker retry & dead-letter flow
@@ -403,7 +403,7 @@ flowchart TD
     B -->|fail| D[Wait backoff]
     D --> E{Attempt 2}
     E -->|success| C
-    E -->|fail| F[Wait backoff × 2]
+    E -->|fail| F[Wait backoff x2]
     F --> G{Attempt 3}
     G -->|success| C
     G -->|fail| H[Move to Dead Letter Queue]
@@ -512,7 +512,7 @@ flowchart LR
     end
 
     subgraph Neon
-        NEON_DB[(PostgreSQL 17)]
+        NEON_DB[PostgreSQL 17]
     end
 
     MAIN -->|push| V_BUILD
