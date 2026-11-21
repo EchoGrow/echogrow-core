@@ -21,7 +21,14 @@ import { APP_GUARD } from '@nestjs/core';
     ThrottlerModule.forRoot([
       {
         ttl: 60_000,
-        limit: process.env.NODE_ENV === 'test' ? 1000 : 10,
+        // Reads (scorecard/analytics) are polled by the UI, so a global limit of
+        // 10/min made every pipeline run fail with 429. Keep a generous global
+        // safety net and apply strict limits only to expensive write endpoints.
+        limit:
+          process.env.NODE_ENV === 'test'
+            ? 1000
+            : Number(process.env.RATE_LIMIT_REQUESTS ?? 120),
+        setHeaders: true,
       },
     ]),
     ConfigModule.forRoot({ isGlobal: true }),

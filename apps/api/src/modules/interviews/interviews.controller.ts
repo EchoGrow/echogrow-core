@@ -7,6 +7,7 @@ import {
   UseInterceptors,
   UploadedFiles,
   BadRequestException,
+  Query,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { InterviewsService } from './interviews.service';
@@ -14,6 +15,11 @@ import { Throttle } from '@nestjs/throttler';
 
 const MAX_CANDIDATES = 50;
 const MAX_FILES = MAX_CANDIDATES * 2;
+
+// Strict per-route limits are relaxed in tests so the existing e2e suites can
+// issue many requests from a single IP. The global limit is already 1000 there.
+const WRITE_LIMIT = process.env.NODE_ENV === 'test' ? 1000 : 10;
+const BULK_UPLOAD_LIMIT = process.env.NODE_ENV === 'test' ? 1000 : 5;
 
 @Controller('interviews')
 export class InterviewsController {
@@ -31,6 +37,7 @@ export class InterviewsController {
   }
 
   @Post('bulk-upload')
+  @Throttle({ default: { limit: BULK_UPLOAD_LIMIT, ttl: 60000 } })
   @UseInterceptors(
     FilesInterceptor('files', MAX_FILES, {
       limits: { fileSize: 10 * 1024 * 1024 },
@@ -76,12 +83,34 @@ export class InterviewsController {
     return this.interviewsService.bulkUpload(files, metadata);
   }
 
+  // One request for the whole shortlist instead of one per pending row.
+  // Keeps bulk polling at a constant request rate regardless of candidate count.
+  @Get('scorecards')
+  async getScorecards(@Query('ids') ids: string) {
+    const parsed = (ids ?? '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean);
+
+    if (parsed.length === 0) {
+      throw new BadRequestException('Provide at least one interview id.');
+    }
+    if (parsed.length > MAX_CANDIDATES) {
+      throw new BadRequestException(
+        `Too many ids (${parsed.length}). Maximum is ${MAX_CANDIDATES}.`,
+      );
+    }
+
+    return this.interviewsService.getScorecards(parsed);
+  }
+
   @Get(':id/scorecard')
   async getScorecard(@Param('id') id: string) {
     return this.interviewsService.getScorecard(id);
   }
 
   @Post(':id/force-evaluate')
+  @Throttle({ default: { limit: WRITE_LIMIT, ttl: 60000 } })
   async forceEvaluation(@Param('id') id: string) {
     return this.interviewsService.forceEvaluation(id);
   }

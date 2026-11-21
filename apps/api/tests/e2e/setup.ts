@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './env';
 import { createHash } from 'crypto';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -93,14 +93,9 @@ export async function closeTestApp(
 // ------------------------------------------------------------
 
 export async function cleanDatabase(prisma: PrismaService): Promise<void> {
-  await prisma.roadmapItem.deleteMany({});
-  await prisma.roadmap.deleteMany({});
-  await prisma.skillGap.deleteMany({});
-  await prisma.discrepancy.deleteMany({});
-  await prisma.dimension.deleteMany({});
-  await prisma.scorecard.deleteMany({});
-  await prisma.interviewSession.deleteMany({});
-  await prisma.candidate.deleteMany({});
+  await prisma.$executeRawUnsafe(
+    'TRUNCATE TABLE "candidates", "interview_sessions" RESTART IDENTITY CASCADE',
+  );
 }
 
 export async function seedSession(
@@ -329,9 +324,20 @@ export async function waitForPipeline(
     ignoreStatuses = [],
   } = options;
   const terminal = ['scored', 'failed', 'needs_review', 'rejected'];
+  let transientErrors = 0;
+  let lastStatus = 'unknown';
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const response = await fetchFn();
+    let response: any;
+    try {
+      response = await fetchFn();
+      transientErrors = 0;
+    } catch (err) {
+      if (++transientErrors > 5) throw err;
+      await sleep(intervalMs);
+      continue;
+    }
+    lastStatus = response.status;
 
     if (terminal.includes(response.status) && !ignoreStatuses.includes(response.status)) {
       if (response.status !== expectedStatus) {
@@ -343,14 +349,12 @@ export async function waitForPipeline(
       if (response.status === 'scored') await sleep(2_000);
       return response;
     }
-
-    if (attempt === maxAttempts) {
-      throw new Error(
-        `Pipeline did not finish after ${maxAttempts} attempts. Last status: ${response.status}`,
-      );
-    }
     await sleep(intervalMs);
   }
+
+  throw new Error(
+    `Pipeline did not finish after ${maxAttempts} attempts. Last status: ${lastStatus}`,
+  );
 }
 
 // ------------------------------------------------------------
