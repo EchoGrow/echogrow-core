@@ -7,6 +7,13 @@ import { INITIAL_SCORECARD_STATE, ScorecardContext } from './context'
 import type { ScorecardState } from './context'
 
 const SPK_BUILD_WATCHDOG_MS = 90_000
+const POLL_BACKOFF_MS = [2_000, 4_000, 8_000, 15_000]
+
+function pollRetryDelay(attempt: number, retryAfterMs?: number): number {
+  if (retryAfterMs) return retryAfterMs
+  const step = Math.min(Math.max(attempt, 0), POLL_BACKOFF_MS.length - 1)
+  return POLL_BACKOFF_MS[step] + Math.floor(Math.random() * 500)
+}
 
 export function ScorecardProvider({
   interviewId,
@@ -118,7 +125,15 @@ export function ScorecardProvider({
               ? cause.message
               : 'Something went wrong while loading the scorecard. Please try again.'
 
-          if (cause instanceof ApiError && cause.status === 400) {
+          if (cause instanceof ApiError && cause.status === 429) {
+            // A rate-limit response is transient: keep the progress line visible
+            // and retry with backoff instead of showing a fatal error.
+            setState((prev) => ({ ...prev, status: 'processing' }))
+            timer = setTimeout(
+              () => setAttempt((v) => v + 1),
+              pollRetryDelay(attempt, cause.retryAfterMs),
+            )
+          } else if (cause instanceof ApiError && cause.status === 400) {
             setState({ status: 'processing', scorecard: null, error: message })
             timer = setTimeout(() => setAttempt((v) => v + 1), 3000)
           } else if (cause instanceof ApiError && cause.status === 404) {
