@@ -29,7 +29,7 @@ import { ThemeToggle } from '../components/ThemeToggle'
 import { MultiDropzone } from '../components/bulk/MultiDropzone'
 import { StatusPill } from '../components/bulk/StatusPill'
 import { Alert, Button, Card, Spinner, toast } from '../components/ui'
-import { ApiError, bulkUploadInterviews, getScorecard } from '../lib/api'
+import { ApiError, bulkUploadInterviews, getScorecards } from '../lib/api'
 import type { BulkUploadResponse, RejectedFileRecord, ScorecardResponse } from '../lib/api'
 import {
   MAX_BULK_CANDIDATES,
@@ -57,6 +57,13 @@ import { fadeUp, staggerContainer } from '../lib/animations'
 
 const POLL_INTERVAL_MS = 3_000
 const MAX_POLL_MS = 20 * 60 * 1000
+const POLL_BACKOFF_MS = [2_000, 4_000, 8_000, 15_000]
+
+function pollRetryDelay(attempt: number, retryAfterMs?: number): number {
+  if (retryAfterMs) return retryAfterMs
+  const step = Math.min(Math.max(attempt, 0), POLL_BACKOFF_MS.length - 1)
+  return POLL_BACKOFF_MS[step] + Math.floor(Math.random() * 500)
+}
 
 interface RowState {
   status: RowStatus
@@ -318,6 +325,8 @@ export function BulkUploadPage() {
 
     let cancelled = false
     let inFlight = false
+    let backoffUntil = 0
+    let throttleAttempt = 0
     const startedAt = Date.now()
 
     const finishWithTimeout = () => {
@@ -337,7 +346,7 @@ export function BulkUploadPage() {
     }
 
     const tick = async () => {
-      if (inFlight) return
+      if (inFlight || Date.now() < backoffUntil) return
       inFlight = true
 
       try {
@@ -355,21 +364,21 @@ export function BulkUploadPage() {
           return
         }
 
-        const settled = await Promise.allSettled(
-          pending.map(async ([key, state]) => ({
-            key,
-            interviewId: state.interviewId,
-            result: await getScorecard(state.interviewId as string),
-          })),
+        // One request for the whole batch: N candidates no longer means N HTTP
+        // calls every 3 seconds (which blew straight through the rate limit).
+        const batch = await getScorecards(
+          pending.map(([, state]) => state.interviewId as string),
         )
 
         if (cancelled) return
 
+        const byId = new Map(batch.map((item) => [item.interviewId, item]))
         const next = { ...rowStateRef.current }
-        for (const item of settled) {
-          if (item.status !== 'fulfilled') continue
-          const { key, interviewId, result } = item.value
-          next[key] = { ...toRowState(result), interviewId }
+        for (const [key, state] of pending) {
+          const item = byId.get(state.interviewId as string)
+          // Leave rows untouched on a transient per-row error so they retry.
+          if (!item?.scorecard) continue
+          next[key] = { ...toRowState(item.scorecard), interviewId: state.interviewId }
         }
 
         rowStateRef.current = next
@@ -379,6 +388,11 @@ export function BulkUploadPage() {
           (state) => state.interviewId && !isTerminalStatus(state.status),
         )
         if (!stillRunning) setPolling(false)
+      } catch (cause) {
+        if (cause instanceof ApiError && cause.status === 429) {
+          backoffUntil =
+            Date.now() + pollRetryDelay(throttleAttempt++, cause.retryAfterMs)
+        }
       } finally {
         inFlight = false
       }

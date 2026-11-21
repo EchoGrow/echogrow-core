@@ -392,6 +392,7 @@ export interface InterviewDetailRecord {
 
 export class ApiError extends Error {
   readonly status: number
+  retryAfterMs?: number
 
   constructor(message: string, status = 0) {
     super(message)
@@ -416,6 +417,22 @@ const MESSAGE_BY_STATUS: Record<number, string> = {
 
 function fallbackMessage(status: number): string {
   return MESSAGE_BY_STATUS[status] ?? `The request failed with status ${status}. Please try again.`
+}
+
+// The throttler sends Retry-After in seconds. Clamp it so a bad header can
+// never stall the poller forever.
+function retryAfterMsFrom(response: Response): number | undefined {
+  const raw = response.headers.get('Retry-After')
+  if (!raw) return undefined
+  const seconds = Number(raw)
+  if (!Number.isFinite(seconds) || seconds <= 0) return undefined
+  return Math.min(Math.max(seconds * 1000, 1_000), 60_000)
+}
+
+async function throwApiError(response: Response): Promise<never> {
+  const error = new ApiError(await readErrorMessage(response), response.status)
+  if (response.status === 429) error.retryAfterMs = retryAfterMsFrom(response)
+  throw error
 }
 
 async function readErrorMessage(response: Response): Promise<string> {
@@ -458,7 +475,7 @@ export async function createInterview(input: CreateInterviewRequest): Promise<Cr
       signal: controller.signal,
     })
 
-    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+    if (!response.ok) await throwApiError(response)
 
     const data = (await response.json()) as Partial<CreateInterviewResponse>
 
@@ -501,7 +518,7 @@ export async function bulkUploadInterviews(
       signal: controller.signal,
     })
 
-    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+    if (!response.ok) await throwApiError(response)
 
     const data = (await response.json()) as Partial<BulkUploadResponse>
 
@@ -544,7 +561,7 @@ export async function getScorecard(interviewId: string): Promise<ScorecardRespon
       { headers: { Accept: 'application/json' }, signal: controller.signal },
     )
 
-    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+    if (!response.ok) await throwApiError(response)
 
     const data = (await response.json()) as ScorecardResponse
 
@@ -553,6 +570,47 @@ export async function getScorecard(interviewId: string): Promise<ScorecardRespon
     }
 
     return data
+  } catch (cause) {
+    if (cause instanceof ApiError) throw cause
+
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw new ApiError('The request timed out. Check your connection and try again.')
+    }
+
+    throw new ApiError('Could not reach the server. Check your connection and try again.')
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
+export interface BatchScorecardItem {
+  interviewId: string
+  scorecard?: ScorecardResponse
+  error?: string
+}
+
+// One HTTP request for the entire shortlist, instead of one per pending row.
+export async function getScorecards(interviewIds: string[]): Promise<BatchScorecardItem[]> {
+  if (interviewIds.length === 0) return []
+
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+
+  try {
+    const params = new URLSearchParams({ ids: interviewIds.join(',') })
+    const response = await fetch(`${API_BASE_URL}/interviews/scorecards?${params.toString()}`, {
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    })
+
+    if (!response.ok) await throwApiError(response)
+
+    const data = (await response.json()) as { scorecards?: BatchScorecardItem[] }
+    if (!Array.isArray(data.scorecards)) {
+      throw new ApiError('The server response did not include scorecards.', 502)
+    }
+
+    return data.scorecards
   } catch (cause) {
     if (cause instanceof ApiError) throw cause
 
@@ -579,7 +637,7 @@ export async function getDiscrepancies(interviewId: string): Promise<Discrepancy
       },
     )
 
-    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+    if (!response.ok) await throwApiError(response)
 
     return (await response.json()) as DiscrepancyResponse
   } catch (cause) {
@@ -620,7 +678,7 @@ export async function updateDiscrepancyStatus(
       },
     )
 
-    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+    if (!response.ok) await throwApiError(response)
   } catch (cause) {
     if (cause instanceof ApiError) throw cause
 
@@ -645,7 +703,7 @@ export async function forceEvaluation(interviewId: string): Promise<{ interviewI
       signal: controller.signal,
     })
 
-    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+    if (!response.ok) await throwApiError(response)
 
     return (await response.json()) as { interviewId: string; status: string }
   } catch (cause) {
@@ -672,7 +730,7 @@ export async function rejectInterview(interviewId: string): Promise<{ interviewI
       signal: controller.signal,
     })
 
-    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+    if (!response.ok) await throwApiError(response)
 
     return (await response.json()) as { interviewId: string; status: string }
   } catch (cause) {
@@ -701,7 +759,7 @@ export async function getRoadmap(interviewId: string): Promise<RoadmapResponse> 
       { headers: { Accept: 'application/json' }, signal: controller.signal },
     );
 
-    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status);
+    if (!response.ok) await throwApiError(response);
 
     return (await response.json()) as RoadmapResponse;
   } catch (cause) {
@@ -764,7 +822,7 @@ export async function getSpkExport(interviewId: string): Promise<SpkExport> {
       { headers: { Accept: 'application/json' }, signal: controller.signal },
     );
 
-    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status);
+    if (!response.ok) await throwApiError(response);
 
     return (await response.json()) as SpkExport;
   } catch (cause) {
@@ -794,7 +852,7 @@ export async function rebuildSpkProfile(
       },
     )
 
-    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+    if (!response.ok) await throwApiError(response)
 
     return (await response.json()) as { interviewId: string; status: string }
   } catch (cause) {
@@ -822,7 +880,7 @@ export async function getCompletedInterviews(): Promise<InterviewListResponse> {
       signal: controller.signal,
     })
 
-    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+    if (!response.ok) await throwApiError(response)
 
     return (await response.json()) as InterviewListResponse
   } catch (cause) {
@@ -854,7 +912,7 @@ export async function compareCandidates(
       signal: controller.signal,
     })
 
-    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+    if (!response.ok) await throwApiError(response)
 
     return (await response.json()) as { id: string; result: ComparisonResult }
   } catch (cause) {
@@ -878,7 +936,7 @@ export async function getComparison(id: string): Promise<ComparisonDetailRespons
       { headers: { Accept: 'application/json' }, signal: controller.signal },
     )
 
-    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+    if (!response.ok) await throwApiError(response)
 
     return (await response.json()) as ComparisonDetailResponse
   } catch (cause) {
@@ -908,7 +966,7 @@ export async function getAnalyticsSummary(
       { headers: { Accept: 'application/json' }, signal: controller.signal },
     )
 
-    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+    if (!response.ok) await throwApiError(response)
 
     return (await response.json()) as AnalyticsSummary
   } catch (cause) {
@@ -939,7 +997,7 @@ export async function getAnalyticsDetails(
       { headers: { Accept: 'application/json' }, signal: controller.signal },
     )
 
-    if (!response.ok) throw new ApiError(await readErrorMessage(response), response.status)
+    if (!response.ok) await throwApiError(response)
 
     return (await response.json()) as AnalyticsDetailResponse
   } catch (cause) {
