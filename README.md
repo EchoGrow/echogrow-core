@@ -287,6 +287,7 @@ Open **http://localhost:5173/upload**, click **Load sample**, then **Analyze int
 | `REDIS_URL` | API | | none | Full Redis URL. When set, it takes precedence over host/port (used in production) |
 | `FRONTEND_URL` | API | | `http://localhost:5173` | CORS origin |
 | `PORT` | API | | `3000` | API port |
+| `RATE_LIMIT_REQUESTS` | API | | `120` | Global per-client request limit per 60s window (ignored when `NODE_ENV=test`) |
 | `WORKER` | API | | none | Set to `true` on the Railway service that runs the queue worker |
 | `VITE_API_URL` | Web | | `/api` | API base URL (keep `/api` in dev) |
 
@@ -535,6 +536,7 @@ The NestJS API listens on `http://localhost:3000` (or `PORT`). In development, t
 | `GET` | `/interviews` | List completed interviews |
 | `POST` | `/interviews/upload` | Create an interview from transcript + resume |
 | `POST` | `/interviews/bulk-upload` | Upload multiple transcript/resume pairs |
+| `GET` | `/interviews/scorecards?ids=…` | Batched scorecards for bulk polling (max 50 ids) |
 | `GET` | `/interviews/:id/scorecard` | Scorecard + pipeline progress |
 | `GET` | `/interviews/:id/discrepancies` | Resume/interview contradictions |
 | `PATCH` | `/discrepancies/:id` | Confirm/dismiss a discrepancy + note |
@@ -548,7 +550,22 @@ The NestJS API listens on `http://localhost:3000` (or `PORT`). In development, t
 | `GET` | `/analytics/summary?range=30d` | KPI + chart summary |
 | `GET` | `/analytics/details?type=…&range=…` | Drill-down data for analytics modals |
 
-Uploads are rate-limited (10 requests / minute per client by default).
+#### Rate limiting
+
+Every endpoint is protected by a **global limit of 120 requests / minute per client IP** (60s window), configurable with `RATE_LIMIT_REQUESTS`. The limit is deliberately generous so the UI can poll while a pipeline runs. Reads (scorecard, analytics, comparison result, SPK export) use this global limit.
+
+Expensive write routes override it with stricter per-route limits:
+
+| Endpoint | Limit |
+| --- | :---: |
+| `POST /interviews/upload` | 10 / min |
+| `POST /interviews/bulk-upload` | 5 / min |
+| `POST /interviews/:id/force-evaluate` | 10 / min |
+| `POST /interviews/compare` | 10 / min |
+
+All other endpoints — `GET /interviews`, `GET /interviews/scorecards?ids=…`, `GET /interviews/:id/scorecard`, `GET /interviews/:id/discrepancies`, `GET /interviews/:id/roadmap`, `GET /interviews/compare/:id`, `GET /analytics/summary`, `GET /analytics/details`, `POST /interviews/:id/reject`, `POST /interviews/:id/spk-rebuild`, `PATCH /discrepancies/:id`, and the diagnostic routes (`/`, `/test-llm`, `/queue-status`) — use the global 120/min limit.
+
+Over-limit requests return **429 Too Many Requests** with a `Retry-After` header and `X-RateLimit-*` response headers. The web client reads `Retry-After` and backs off without losing pipeline progress. In production the API enables `trust proxy`, so clients behind Vercel/Render are keyed by `X-Forwarded-For` instead of sharing one proxy IP. Test runs relax all limits to 1000/min.
 
 <p align="center"><img src="docs/assets/brand/divider.svg" width="760" alt="" /></p>
 
@@ -570,13 +587,13 @@ npm run test:e2e:analytics -w api
 
 | Suite | Tests | Status |
 | --- | ---: | :---: |
-| API unit | 20 | ✅ |
+| API unit | 22 | ✅ |
 | API integration | 5 | ✅ |
 | API E2E (endpoints) | 68 | ✅ |
 | API E2E (pipeline) | 22 | ✅ |
 | Web (Vitest) | 24 | ✅ |
 | Shared schemas | 5 | ✅ |
-| **Total** | **144** | ✅ |
+| **Total** | **146** | ✅ |
 
 > [!IMPORTANT]
 > The endpoint and pipeline E2E suites need PostgreSQL and Redis, and they **delete all rows** from the target database. Point `DATABASE_URL` at a dedicated test database. The pipeline suite also calls Gemini, so it needs a valid `GEMINI_API_KEY`. The unit and web suites run without any infrastructure.
