@@ -407,6 +407,35 @@ export class InterviewsService {
     return ScorecardSchema.parse(response);
   }
 
+  async getScorecards(interviewIds: string[]) {
+    const settled = await Promise.allSettled(
+      interviewIds.map(async (interviewId) => ({
+        interviewId,
+        scorecard: await this.getScorecard(interviewId),
+      })),
+    );
+
+    return {
+      scorecards: settled.map((item, index) => {
+        if (item.status === 'fulfilled') return item.value;
+
+        const reason = item.reason;
+        if (!(reason instanceof NotFoundException)) {
+          this.logger.warn(
+            `Could not load scorecard for ${interviewIds[index]}: ${
+              reason instanceof Error ? reason.message : String(reason)
+            }`,
+          );
+        }
+
+        return {
+          interviewId: interviewIds[index],
+          error: reason instanceof Error ? reason.message : 'Could not load scorecard.',
+        };
+      }),
+    };
+  }
+
   async forceEvaluation(interviewId: string) {
     const session = await this.prisma.interviewSession.findUnique({
       where: { id: interviewId },
