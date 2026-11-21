@@ -358,81 +358,148 @@ stateDiagram
 
 ```mermaid
 erDiagram
-    Candidate ||--o{ InterviewSession : has
-    InterviewSession ||--|| Scorecard : produces
-    Scorecard ||--o{ Dimension : contains
-    Scorecard ||--o{ Discrepancy : contains
-    Scorecard ||--o{ Roadmap : has
-    Roadmap ||--o{ RoadmapItem : contains
-    Dimension ||--o{ SkillGap : identifies
-    InterviewSession ||--o| SpkProfile : exports
+    Candidate          ||--o{ InterviewSession    : has
+    InterviewSession   ||--o| Scorecard           : produces
+    InterviewSession   ||--o| SpkProfile          : exports
+    InterviewSession   ||--o{ ComparisonInterview : "appears in"
+    InterviewSession   ||--o{ ComparisonRanking   : "ranked in"
+    Scorecard          ||--o{ Dimension           : contains
+    Scorecard          ||--o{ Discrepancy         : flags
+    Scorecard          ||--o| Roadmap             : feeds
+    Dimension          ||--o{ SkillGap            : identifies
+    Roadmap            ||--o{ RoadmapItem         : contains
+    SkillGap           ||--o| RoadmapItem         : "mapped to"
+    Comparison         ||--o{ ComparisonInterview : includes
+    Comparison         ||--o{ ComparisonRanking   : ranks
 
     Candidate {
         string id PK
         string name
-        string email
-        datetime createdAt
+        string email UK
+        datetime created_at
+        datetime updated_at
     }
     InterviewSession {
         string id PK
-        string candidateId FK
+        string candidate_id FK
         string transcript
+        string transcript_hash
         string resume
-        string structuredTranscript
-        string status
-        int processingAttempts
-        datetime processingStartedAt
+        string resume_hash
+        json structured_transcript
+        string status "InterviewStatus enum"
+        boolean is_scored
+        boolean is_verified
+        boolean is_planned
+        float manual_review_minutes
+        int echogrow_seconds
+        float saved_minutes
+        datetime completed_at
+        datetime processing_started_at
+        int processing_attempts
+        string spk_status
+        string spk_error
+        datetime created_at
+        datetime updated_at
     }
     Scorecard {
         string id PK
-        string interviewId FK
-        float overallScore
+        string interview_id FK
+        float overall_score
         float confidence
-        string status
+        string status "ScorecardStatus enum"
+        datetime created_at
+        datetime updated_at
     }
     Dimension {
         string id PK
-        string scorecardId FK
-        string dimensionType
+        string scorecard_id FK
+        string dimension_type "DimensionType enum"
         int score
         string reason
-        json evidenceQuote
+        json evidence_quote
+        datetime created_at
     }
     Discrepancy {
         string id PK
-        string scorecardId FK
+        string scorecard_id FK
         string claim
-        string cvQuote
-        string interviewQuote
+        string cv_quote
+        string interview_quote
         float confidence
-        string status
-        string severity
+        string status "DiscrepancyStatus enum"
+        string severity "DiscrepancySeverity enum"
+        string reviewerNotes
+        datetime reviewed_at
+        datetime created_at
     }
     SkillGap {
         string id PK
-        string dimensionId FK
-        string skillName
-        string priority
+        string dimension_id FK
+        string skill_name
+        string priority "SkillGapPriority enum"
+        datetime created_at
     }
     Roadmap {
         string id PK
-        string scorecardId FK
+        string scorecard_id FK
+        datetime created_at
+        datetime updated_at
     }
     RoadmapItem {
         string id PK
-        string roadmapId FK
-        string skillGapId FK
+        string roadmap_id FK
+        string skill_gap_id FK
         int week
         string description
-        string resourceUrl
+        string resource_url
+        datetime created_at
     }
     SpkProfile {
         string id PK
-        string interviewId FK
-        json spkPayload
-        string schemaVersion
+        string interview_id FK
+        string seniority
+        string primary_role
+        string timezone
+        json languages
+        int years_of_experience
+        json spk_payload
+        string schema_version
+        datetime created_at
+        datetime updated_at
+    }
+    Comparison {
+        string id PK
+        string target_role
+        string status "ComparisonStatus enum"
+        string error
+        int candidate_count
+        float confidence
+        string summary
+        string recommendation
+        json result
+        datetime created_at
+        datetime updated_at
+        datetime completed_at
+    }
+    ComparisonInterview {
+        string id PK
+        string comparison_id FK
+        string interview_id FK
+        int rank
+        float fit_score
+    }
+    ComparisonRanking {
+        string id PK
+        string comparison_id FK
+        string interview_id FK
+        int rank
+        string reason
+        float fit_score
     }
 ```
+
+**Source of truth:** [`apps/api/prisma/schema.prisma`](apps/api/prisma/schema.prisma). Attribute names are the actual DB column names (`@@map`). Enums are mapped to `interview_status`, `scorecard_status`, `dimension_type`, `discrepancy_status`, `discrepancy_severity`, `skill_gap_priority`, and `comparison_status`. Unique constraints: `Candidate.email`, `Scorecard.interview_id`, `Roadmap.scorecard_id`, `SpkProfile.interview_id`, `(Dimension.scorecard_id, Dimension.dimension_type)`, `(SkillGap.dimension_id, SkillGap.skill_name)`, `RoadmapItem.skill_gap_id`, `(ComparisonInterview.comparison_id, ComparisonInterview.interview_id)`, and `(ComparisonRanking.comparison_id, ComparisonRanking.interview_id)`.
 
 </details>
 
